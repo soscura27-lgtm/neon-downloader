@@ -8,6 +8,12 @@ plugins {
     id "org.jetbrains.kotlin.plugin.compose" version "2.3.0"
 }
 
+// El plugin de secretos exige que exista local.properties (el original lo crea en su CI).
+def localPropertiesFile = rootProject.file("local.properties")
+if (!localPropertiesFile.exists()) {
+    localPropertiesFile.createNewFile()
+}
+
 def properties = new Properties()
 def versionMajor = 1
 def versionMinor = 9
