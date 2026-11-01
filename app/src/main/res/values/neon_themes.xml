@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Tipografía de pantalla: Orbitron (SIL OFL 1.1) para títulos y botones -->
+    <style name="TextAppearance.Neon.Headline" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="android:fontFamily">@font/neo_display</item>
+        <item name="fontFamily">@font/neo_display</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
+    <style name="TextAppearance.Neon.Title" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:fontFamily">@font/neo_display</item>
+        <item name="fontFamily">@font/neo_display</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
+    <style name="TextAppearance.Neon.Button" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:fontFamily">@font/neo_display</item>
+        <item name="fontFamily">@font/neo_display</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+
+    <!-- Tarjetas con borde de cian tenue, como los paneles HUD de la maqueta -->
+    <style name="Widget.Neon.CardView" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/neon_card</item>
+        <item name="strokeColor">@color/neon_card_stroke</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <!-- Barra de navegación inferior -->
+    <style name="Widget.Neon.BottomNavigation" parent="Widget.Material3.BottomNavigationView">
+        <item name="backgroundTint">@color/neon_bar</item>
+    </style>
+
+    <!--
+      Tema principal. Siempre oscuro (ThemeUtil fuerza el modo noche cuando el acento es "neon").
+      Hereda de BaseTheme para conservar diálogos, snackbars y preferencias del proyecto original.
+    -->
+    <style name="Theme.Neon" parent="BaseTheme">
+        <item name="colorPrimary">@color/neon_primary</item>
+        <item name="colorOnPrimary">@color/neon_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/neon_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/neon_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/neon_secondary</item>
+        <item name="colorOnSecondary">@color/neon_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/neon_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/neon_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/neon_tertiary</item>
+        <item name="colorOnTertiary">@color/neon_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/neon_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/neon_onTertiaryContainer</item>
+        <item name="colorError">@color/neon_error</item>
+        <item name="colorOnError">@color/neon_onError</item>
+        <item name="colorErrorContainer">@color/neon_errorContainer</item>
+        <item name="colorOnErrorContainer">@color/neon_onErrorContainer</item>
+        <item name="android:colorBackground">@color/neon_background</item>
+        <item name="colorOnBackground">@color/neon_onBackground</item>
+        <item name="colorSurface">@color/neon_surface</item>
+        <item name="colorOnSurface">@color/neon_onSurface</item>
+        <item name="colorSurfaceVariant">@color/neon_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/neon_onSurfaceVariant</item>
+        <item name="colorOutline">@color/neon_outline</item>
+        <item name="colorOutlineVariant">@color/neon_outlineVariant</item>
+        <item name="colorSurfaceInverse">@color/neon_inverseSurface</item>
+        <item name="colorOnSurfaceInverse">@color/neon_inverseOnSurface</item>
+        <item name="colorPrimaryInverse">@color/neon_inversePrimary</item>
+        <item name="colorSurfaceContainerLowest">@color/neon_surfaceContainerLowest</item>
+        <item name="colorSurfaceContainerLow">@color/neon_surfaceContainerLow</item>
+        <item name="colorSurfaceContainer">@color/neon_surfaceContainer</item>
+        <item name="colorSurfaceContainerHigh">@color/neon_surfaceContainerHigh</item>
+        <item name="colorSurfaceContainerHighest">@color/neon_surfaceContainerHighest</item>
+
+        <!-- Usado por ThemeUtil.getStyledAppName() para colorear el nombre -->
+        <item name="colorPrimaryDark">@color/neon_orange</item>
+
+        <!-- Fondo espacial y barras del sistema -->
+        <item name="android:windowBackground">@drawable/neon_window_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/neon_bar</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+
+        <!-- Tipografía -->
+        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.Neon.Headline</item>
+        <item name="textAppearanceHeadlineMedium">@style/TextAppearance.Neon.Headline</item>
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.Neon.Headline</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.Neon.Title</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.Neon.Button</item>
+
+        <!-- Componentes -->
+        <item name="materialCardViewStyle">@style/Widget.Neon.CardView</item>
+        <item name="bottomNavigationStyle">@style/Widget.Neon.BottomNavigation</item>
+    </style>
+
+</resources>

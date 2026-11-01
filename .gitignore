@@ -1,0 +1,18 @@
+*.iml
+.gradle
+/local.properties
+/keystore.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+/benchmark
+app/src/main/jniLibs
+.kotlin
+
+# Firma: nunca se sube al repositorio (el repo es público)
+/signing/
+*.p12
+*.jks
+*.keystore

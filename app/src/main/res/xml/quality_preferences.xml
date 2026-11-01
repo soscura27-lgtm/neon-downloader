@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sección propia "Calidad y velocidad".
+  Reúne en una sola pantalla los ajustes nativos de yt-dlp que más influyen en la
+  calidad y la rapidez. Usa las mismas claves que las pantallas "Descargas" y
+  "Procesamiento", por lo que ambas siempre muestran los mismos valores.
+-->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        android:icon="@drawable/baseline_high_quality_24"
+        android:key="quality_info"
+        android:selectable="false"
+        android:summary="@string/quality_speed_info"
+        android:title="@string/quality_speed" />
+
+    <PreferenceCategory android:title="@string/video">
+        <ListPreference
+            android:defaultValue="best"
+            android:entries="@array/video_formats"
+            android:entryValues="@array/video_formats_values"
+            android:icon="@drawable/ic_video"
+            app:key="video_quality"
+            app:useSimpleSummaryProvider="true"
+            app:title="@string/video_quality" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/audio">
+        <Preference
+            android:icon="@drawable/baseline_high_quality_24"
+            app:key="audio_bitrate"
+            app:defaultValue=""
+            android:summary="@string/defaultValue"
+            app:title="@string/bitrate" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/speed">
+        <SeekBarPreference
+            android:defaultValue="4"
+            android:icon="@drawable/ic_lines"
+            android:max="25"
+            app:key="concurrent_fragments"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:summary="@string/concurrent_fragments_summary"
+            app:title="@string/concurrent_fragments" />
+
+        <SeekBarPreference
+            android:defaultValue="2"
+            android:icon="@drawable/ic_concurrent_downloads"
+            android:max="10"
+            app:key="concurrent_downloads"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:summary="@string/concurrent_downloads_summary"
+            app:title="@string/concurrent_downloads" />
+
+        <SwitchPreferenceCompat
+            android:widgetLayout="@layout/preferece_material_switch"
+            app:defaultValue="false"
+            android:icon="@drawable/ic_speed"
+            android:key="aria2"
+            app:summary="@string/aria2_summary"
+            android:disableDependentsState="true"
+            app:title="aria2c" />
+
+        <EditTextPreference
+            android:icon="@drawable/ic_limitrate"
+            app:key="limit_rate"
+            app:summary="@string/limit_rate_summary"
+            app:title="@string/limit_rate" />
+
+        <EditTextPreference
+            android:icon="@drawable/baseline_settings_input_component_24"
+            app:key="buffer_size"
+            app:summary="@string/buffer_size_summary"
+            app:title="@string/buffer_size" />
+    </PreferenceCategory>
+</PreferenceScreen>

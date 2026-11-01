@@ -1,0 +1,60 @@
+format_version: '13'
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: android
+
+meta:
+  bitrise.io:
+    stack: ubuntu-noble-24.04-bitrise-2025-android
+
+workflows:
+  # Compila el APK firmado (variante githubRelease, arm64-v8a) y lo publica con una
+  # página de instalación pública para abrirla directamente desde el celular.
+  build-apk:
+    summary: APK firmado de Neon Downloader
+    steps:
+    - activate-ssh-key@4:
+        run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+    - git-clone@8: {}
+    - script@1:
+        title: Preparar firma estable
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euo pipefail
+            bash scripts/ci/prepare_signing.sh
+    - install-missing-android-tools@3:
+        inputs:
+        - gradlew_path: ./gradlew
+    - android-build@1:
+        inputs:
+        - project_location: $BITRISE_SOURCE_DIR
+        - module: app
+        - variant: githubRelease
+        - build_type: apk
+        - app_path_pattern: app/build/outputs/apk/github/release/*.apk
+        - arguments: --stacktrace
+    - deploy-to-bitrise-io@2:
+        inputs:
+        - is_enable_public_page: 'true'
+        - notify_user_groups: none
+
+  # Compilación de depuración rápida, útil para verificar que todo compila.
+  check-debug:
+    summary: Verifica que el proyecto compila (sin firmar)
+    steps:
+    - git-clone@8: {}
+    - install-missing-android-tools@3:
+        inputs:
+        - gradlew_path: ./gradlew
+    - android-build@1:
+        inputs:
+        - project_location: $BITRISE_SOURCE_DIR
+        - module: app
+        - variant: githubDebug
+        - build_type: apk
+        - app_path_pattern: app/build/outputs/apk/github/debug/*.apk
+        - arguments: --stacktrace
+    - deploy-to-bitrise-io@2:
+        inputs:
+        - is_enable_public_page: 'false'
+        - notify_user_groups: none

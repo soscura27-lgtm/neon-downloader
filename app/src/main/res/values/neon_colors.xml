@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Paleta "Neon Space" (esquema oscuro Material 3).
+  Cian neón = primario, naranja = acento, azul marino profundo = superficies.
+-->
+<resources>
+    <!-- Colores base reutilizables -->
+    <color name="neon_cyan">#FF22E6FF</color>
+    <color name="neon_cyan_dim">#FF1B9DB8</color>
+    <color name="neon_orange">#FFFF7A1A</color>
+    <color name="neon_violet">#FFB79CFF</color>
+    <color name="neon_bar">#FF050A22</color>
+    <color name="neon_card">#E60B1B3A</color>
+    <color name="neon_card_stroke">#6622E6FF</color>
+
+    <!-- Roles Material 3 -->
+    <color name="neon_primary">#FF22E6FF</color>
+    <color name="neon_onPrimary">#FF00323A</color>
+    <color name="neon_primaryContainer">#FF0B4A5E</color>
+    <color name="neon_onPrimaryContainer">#FFB8F4FF</color>
+
+    <color name="neon_secondary">#FFFF7A1A</color>
+    <color name="neon_onSecondary">#FF3A1800</color>
+    <color name="neon_secondaryContainer">#FF5B2A08</color>
+    <color name="neon_onSecondaryContainer">#FFFFD9BC</color>
+
+    <color name="neon_tertiary">#FFB79CFF</color>
+    <color name="neon_onTertiary">#FF2A0F6B</color>
+    <color name="neon_tertiaryContainer">#FF43308A</color>
+    <color name="neon_onTertiaryContainer">#FFE6DCFF</color>
+
+    <color name="neon_error">#FFFF6B6B</color>
+    <color name="neon_onError">#FF4A0000</color>
+    <color name="neon_errorContainer">#FF7A1F1F</color>
+    <color name="neon_onErrorContainer">#FFFFDAD6</color>
+
+    <color name="neon_background">#FF070D2B</color>
+    <color name="neon_onBackground">#FFE6F1FF</color>
+    <color name="neon_surface">#FF0A1330</color>
+    <color name="neon_onSurface">#FFE6F1FF</color>
+    <color name="neon_surfaceVariant">#FF172451</color>
+    <color name="neon_onSurfaceVariant">#FFA9BCE0</color>
+    <color name="neon_outline">#FF4D6BB3</color>
+    <color name="neon_outlineVariant">#FF26376E</color>
+
+    <color name="neon_inverseSurface">#FFE6F1FF</color>
+    <color name="neon_inverseOnSurface">#FF0A1330</color>
+    <color name="neon_inversePrimary">#FF00778A</color>
+
+    <color name="neon_surfaceContainerLowest">#FF050A22</color>
+    <color name="neon_surfaceContainerLow">#FF091128</color>
+    <color name="neon_surfaceContainer">#FF0D1838</color>
+    <color name="neon_surfaceContainerHigh">#FF132050</color>
+    <color name="neon_surfaceContainerHighest">#FF1A2A63</color>
+</resources>

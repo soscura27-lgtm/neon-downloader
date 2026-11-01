@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportHeight="108"
+    android:viewportWidth="108">
+    <!-- resplandor de la flecha -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M48,24h12v22h10l-16,18l-16,-18h10z"
+        android:strokeAlpha="0.35"
+        android:strokeColor="#22E6FF"
+        android:strokeLineJoin="round"
+        android:strokeWidth="4" />
+    <!-- flecha de descarga -->
+    <path
+        android:fillColor="#22E6FF"
+        android:pathData="M48,24h12v22h10l-16,18l-16,-18h10z" />
+    <!-- bandeja -->
+    <path
+        android:fillColor="#FF7A1A"
+        android:pathData="M32,70h8v8h28v-8h8v16h-44z" />
+</vector>
