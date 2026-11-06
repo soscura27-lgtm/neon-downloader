@@ -139,7 +139,7 @@ class NotificationUtil(var context: Context) {
             .setContentTitle(resources.getString(R.string.observe_sources))
             .setContentText(title)
             .setOngoing(true)
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(
                 BitmapFactory.decodeResource(
                     resources,
@@ -188,7 +188,7 @@ class NotificationUtil(var context: Context) {
 
         notificationBuilder
             .setContentTitle(title)
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(
                 BitmapFactory.decodeResource(
                     resources,
@@ -260,7 +260,7 @@ class NotificationUtil(var context: Context) {
         val bitmap = iconType.toBitmap(context)
         notificationBuilder
             .setContentTitle("${res.getString(R.string.downloaded)} $title")
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(bitmap)
             .setGroup(DOWNLOAD_FINISHED_NOTIFICATION_ID.toString())
             .setContentText(title)
@@ -332,7 +332,7 @@ class NotificationUtil(var context: Context) {
         ) {
             //make summary notification
             val summaryNotification = getBuilder(DOWNLOAD_WORKER_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+                .setSmallIcon(R.drawable.ic_stat_rocket)
                 .setLargeIcon(bitmap)
                 .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
                 .setGroup(DOWNLOAD_FINISHED_NOTIFICATION_ID.toString())
@@ -535,7 +535,7 @@ class NotificationUtil(var context: Context) {
                 ).build()
 
                 val builder = Notification.Builder(context, channel)
-                    .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+                    .setSmallIcon(R.drawable.ic_stat_rocket)
                     .setContentTitle("$progress%")
                     .setContentText(title)
                     .setSubText(contentText)
@@ -617,7 +617,7 @@ class NotificationUtil(var context: Context) {
         return notificationBuilder
             .setContentTitle(resources.getString(R.string.cleanup_leftover_downloads))
             .setCategory(Notification.CATEGORY_EVENT)
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(
                 BitmapFactory.decodeResource(
                     resources,
@@ -753,7 +753,7 @@ class NotificationUtil(var context: Context) {
             .setContentTitle(resources.getString(R.string.updating_download_data))
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_MESSAGE)
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(
                 BitmapFactory.decodeResource(
                     resources,
@@ -819,7 +819,7 @@ class NotificationUtil(var context: Context) {
 
         notificationBuilder
             .setContentTitle(resources.getString(R.string.finished_download_notification_channel_name))
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(
                 BitmapFactory.decodeResource(
                     resources,
@@ -846,7 +846,7 @@ class NotificationUtil(var context: Context) {
 
         notificationBuilder
             .setContentTitle(resources.getString(R.string.all_queries_finished))
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(
                 BitmapFactory.decodeResource(
                     resources,
@@ -872,7 +872,7 @@ class NotificationUtil(var context: Context) {
 
         notificationBuilder
             .setContentTitle(resources.getString(R.string.version_ready_to_download, version))
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(
                 BitmapFactory.decodeResource(
                     resources,
@@ -898,7 +898,7 @@ class NotificationUtil(var context: Context) {
 
         notificationBuilder
             .setContentTitle(resources.getString(R.string.package_version_ready_to_download, packageName, version))
-            .setSmallIcon(R.drawable.ic_launcher_foreground_large)
+            .setSmallIcon(R.drawable.ic_stat_rocket)
             .setLargeIcon(
                 BitmapFactory.decodeResource(
                     resources,

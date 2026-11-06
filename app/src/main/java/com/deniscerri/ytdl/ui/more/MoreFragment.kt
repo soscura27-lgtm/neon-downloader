@@ -67,11 +67,10 @@ class MoreFragment : Fragment() {
         terminateApp = view.findViewById(R.id.terminate)
         settings = view.findViewById(R.id.settings)
 
-        val appIcon = view.findViewById<ImageView>(R.id.app_icon)
-        if (mainSharedPreferences.getString("theme_accent", "blue") == "Default" && Build.VERSION.SDK_INT >= 32) {
-            appIcon.backgroundTintList = MaterialColors.getColorStateList(requireContext(), R.attr.colorPrimary, ContextCompat.getColorStateList(requireContext(), R.color.icon_fg)!!)
-        } else {
-            appIcon.backgroundTintList = null
+        // el logo conserva sus propios colores en todos los temas
+        view.findViewById<ImageView>(R.id.app_icon).apply {
+            backgroundTintList = null
+            imageTintList = null
         }
 
         var showingTerminal = false

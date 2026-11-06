@@ -24,6 +24,7 @@
             android:icon="@drawable/ic_frame"
             android:title="@string/app_icon"
             android:summary="@string/defaultValue"
+            app:isPreferenceVisible="false"
             app:key="ytdlnis_icon" />
 
         <ListPreference
