@@ -3,10 +3,12 @@ package com.deniscerri.ytdl.ui.adapter
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.deniscerri.ytdl.R
 import com.deniscerri.ytdl.databinding.NavOptionsItemBinding
+import com.deniscerri.ytdl.util.NavbarUtil
 
 class NavBarOptionsAdapter(
     val items: MutableList<MenuItem>,
@@ -59,6 +61,14 @@ class NavBarOptionsAdapter(
             }
             checkbox.setOnClickListener {
                 item.isVisible = checkbox.isChecked
+                val shown = items.count { it.isVisible || essential.contains(it.itemId) }
+                if (checkbox.isChecked && shown > NavbarUtil.MAX_VISIBLE_ITEMS) {
+                    // la barra inferior no admite más pestañas
+                    item.isVisible = false
+                    checkbox.isChecked = false
+                    Toast.makeText(root.context, R.string.navbar_max_items, Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
                 if (!checkbox.isChecked){
                     onItemClickListener.onNavBarOptionDeselected(this)
                 }

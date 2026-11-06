@@ -191,6 +191,7 @@
     </array>
 
     <array name="start_destination">
+        <item>@string/explore</item>
         <item>@string/home</item>
         <item>@string/downloads</item>
         <item>@string/download_queue</item>
@@ -198,6 +199,7 @@
     </array>
 
     <array name="start_destination_values">
+        <item>Explore</item>
         <item>Home</item>
         <item>History</item>
         <item>Queue</item>

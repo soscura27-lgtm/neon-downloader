@@ -64,6 +64,12 @@ class YTDLPUtil(private val context: Context, private val commandTemplateDao: Co
     private val formatUtil = FormatUtil(context)
     private val handler = Handler(Looper.getMainLooper())
 
+    companion object {
+        /** Un Mix de YouTube (list=RD...) no tiene final: se leen como máximo estos vídeos. */
+        const val MIX_MAX_ITEMS = 300
+        private val MIX_LIST_PARAM = Regex("[?&]list=RD")
+    }
+
     private fun YTDLRequest.applyDefaultOptionsForFetchingData(url: String?) {
         addOption("--skip-download")
         addOption("--quiet")
@@ -169,6 +175,10 @@ class YTDLPUtil(private val context: Context, private val commandTemplateDao: Co
         }
 
         request.addOption("--lazy-playlist")
+        if (query.isYoutubeURL() && MIX_LIST_PARAM.containsMatchIn(query)) {
+            // el Mix no se acaba nunca: sin tope yt-dlp seguiría pidiendo vídeos sin parar
+            request.addOption("--playlist-end", MIX_MAX_ITEMS.toString())
+        }
         request.addOption(if (singleItem) "-J" else "-j")
         request.applyDefaultOptionsForFetchingData(if (query.isURL()) query else null)
         val usePlaylistOriginalURL = sharedPreferences.getBoolean("use_original_url_playlist", false)

@@ -41,6 +41,11 @@
             app:destination="@id/terminalActivity" />
     </fragment>
     <fragment
+        android:id="@+id/exploreFragment"
+        android:name="com.deniscerri.ytdl.ui.explore.ExploreFragment"
+        android:label="@string/explore"
+        tools:layout="@layout/fragment_explore" />
+    <fragment
         android:id="@+id/historyFragment"
         android:name="com.deniscerri.ytdl.ui.downloads.HistoryFragment"
         android:label="@string/downloads"

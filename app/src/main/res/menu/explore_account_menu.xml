@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/explore_account_sign_in"
+        android:title="@string/explore_sign_in" />
+    <item
+        android:id="@+id/explore_account_use_downloads"
+        android:checkable="true"
+        android:title="@string/explore_use_account_downloads" />
+    <item
+        android:id="@+id/explore_account_sign_out"
+        android:title="@string/explore_sign_out" />
+</menu>

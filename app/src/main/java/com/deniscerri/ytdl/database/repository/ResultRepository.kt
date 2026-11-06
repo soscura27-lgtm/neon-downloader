@@ -241,6 +241,32 @@ class ResultRepository(private val resultDao: ResultDao, commandTemplateDao: Com
         return finalResults
     }
 
+    /**
+     * Mix de YouTube (list=RD...). Siempre se lee con yt-dlp: NewPipe solo devolvería el vídeo
+     * con el que empieza el Mix, y yt-dlp corta la lectura en YTDLPUtil.MIX_MAX_ITEMS vídeos
+     * porque un Mix no tiene final. La dirección debe ser del tipo watch?v=...&list=RD...
+     */
+    suspend fun getYoutubeMix(url: String, resetResults: Boolean, addToResults: Boolean = true) : List<ResultItem> {
+        if (resetResults) deleteAll()
+
+        val finalResults = mutableListOf<ResultItem>()
+        var itemCounts = 0
+        ytdlpUtil.getFromYTDL(url) {
+            currentCoroutineContext().ensureActive()
+            if (addToResults) {
+                val ids = resultDao.insertMultiple(it)
+                ids.forEachIndexed { index, id ->
+                    it[index].id = id
+                }
+            }
+            finalResults.addAll(it)
+            itemCounts += it.size
+            itemCount.value = itemCounts
+        }
+
+        return finalResults
+    }
+
     private suspend fun getYoutubeChannel(url: String, resetResults: Boolean, addToResults: Boolean) : List<ResultItem>{
         if (resetResults) deleteAll()
         val items = mutableListOf<ResultItem>()

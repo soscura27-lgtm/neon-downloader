@@ -46,6 +46,7 @@ import com.deniscerri.ytdl.ui.BaseActivity
 import com.deniscerri.ytdl.ui.home.HomeFragment
 import com.deniscerri.ytdl.ui.downloads.DownloadQueueMainFragment
 import com.deniscerri.ytdl.ui.downloads.HistoryFragment
+import com.deniscerri.ytdl.ui.explore.ExploreFragment
 import com.deniscerri.ytdl.ui.more.settings.SettingsActivity
 import com.deniscerri.ytdl.ui.welcome.WelcomeActivity
 import com.deniscerri.ytdl.util.ApkInstallUtil
@@ -184,6 +185,11 @@ class MainActivity : BaseActivity() {
                         val intent = Intent(context, SettingsActivity::class.java)
                         startActivity(intent)
                     }
+                    R.id.exploreFragment -> {
+                        kotlin.runCatching {
+                            (navHostFragment.childFragmentManager.primaryNavigationFragment!! as ExploreFragment).onTabReselected()
+                        }
+                    }
                 }
             }
 
@@ -228,7 +234,7 @@ class MainActivity : BaseActivity() {
         navigationView?.apply {
             setupWithNavController(navController)
             //terminate button
-            menu.getItem(8).setOnMenuItemClickListener {
+            menu.findItem(R.id.terminate)?.setOnMenuItemClickListener {
                 fun terminateApp() {
                     BgUtilsPoTokenGeneratorUtil.releaseServer(context, 0)
                     finishAndRemoveTask()
@@ -273,7 +279,7 @@ class MainActivity : BaseActivity() {
                 true
             }
             //settings button
-            menu.getItem(9).setOnMenuItemClickListener {
+            menu.findItem(R.id.activitySettings)?.setOnMenuItemClickListener {
                 val intent = Intent(context, SettingsActivity::class.java)
                 startActivity(intent)
                 true

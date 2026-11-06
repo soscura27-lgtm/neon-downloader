@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Lista maestra de las pestañas que se pueden mostrar en la barra de navegación.
+    El ORDEN de este archivo es el que usan los índices guardados en los ajustes
+    ("navigation_bar"), así que las pestañas nuevas solo se añaden al final.
+
+    bottom_nav_menu.xml es solo el menú que traen los layouts al inflarse (máx. 5 elementos
+    en BottomNavigationView); NavbarUtil.applyNavBarStyle() lo rehace a partir de esta lista.
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android" android:theme="@style/BaseTheme">
+
+    <item android:title="@string/home"
+        android:icon="@drawable/ic_home"
+        android:id="@+id/homeFragment"/>
+
+    <item android:title="@string/downloads"
+        android:icon="@drawable/ic_downloads"
+        android:id="@+id/historyFragment"/>
+
+    <item android:title="@string/more"
+        android:icon="@drawable/ic_more"
+        android:id="@+id/moreFragment"/>
+
+    <item android:title="@string/queue"
+        android:icon="@drawable/baseline_downloading_24"
+        android:visible="true"
+        android:id="@+id/downloadQueueMainFragment"/>
+
+    <item android:title="@string/terminal"
+        android:icon="@drawable/ic_terminal"
+        android:visible="false"
+        android:id="@+id/terminalActivity"/>
+
+    <item android:title="@string/explore"
+        android:icon="@drawable/ic_explore"
+        android:id="@+id/exploreFragment"/>
+</menu>
