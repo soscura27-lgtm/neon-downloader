@@ -190,7 +190,8 @@ class DownloadQueueUtil(private val context: Context) {
         val useScheduler = sharedPreferences.getBoolean("use_scheduler", false)
         if (useScheduler && !alarmScheduler.isDuringTheScheduledTime()){
             if (alarmScheduler.canSchedule()){
-                repository.updateAll(queuedItems)
+                val stored = repository.updateAll(queuedItems)
+                applyQueuePlacement(stored)
                 alarmScheduler.schedule()
             }else{
                 sharedPreferences.edit().putBoolean("use_scheduler", false).apply()
@@ -198,9 +199,42 @@ class DownloadQueueUtil(private val context: Context) {
             }
         }else{
             queued = repository.updateAll(queuedItems)
+            applyQueuePlacement(queued)
             resultMessage = repository.startDownloadWorker(queued, context).getOrElse { "" }
         }
 
         return Result(queued = queued, duplicates = existingItemIDs, message = resultMessage)
+    }
+
+    /**
+     * Si el usuario pidió un lugar concreto de la cola para estas descargas ("que sea la siguiente", "la 3"),
+     * se les da ahora que ya tienen id. Las programadas no entran: su orden lo marca la hora.
+     */
+    private suspend fun applyQueuePlacement(stored: List<DownloadItem>) {
+        // (id, lugar pedido), en el orden en que llegaron
+        val placed = ArrayList<Pair<Long, Int>>()
+        stored.forEach { item ->
+            if (item.id <= 0L || item.status != DownloadRepository.Status.Queued.toString()) return@forEach
+            val position = QueuePlacement.consume(item.url) ?: return@forEach
+            placed.add(item.id to position)
+        }
+        if (placed.isEmpty()) return
+
+        // los que piden lugares seguidos (P, P+1, P+2...) forman un bloque y se colocan de una sola vez
+        val blocks = ArrayList<Pair<Int, MutableList<Long>>>()
+        placed.forEach { (id, position) ->
+            val last = blocks.lastOrNull()
+            if (last != null && position == last.first + last.second.size) {
+                last.second.add(id)
+            } else {
+                blocks.add(position to mutableListOf(id))
+            }
+        }
+
+        withContext(Dispatchers.IO) {
+            blocks.forEach { (start, ids) ->
+                dao.putAtPositionInQueue(ids, start)
+            }
+        }
     }
 }

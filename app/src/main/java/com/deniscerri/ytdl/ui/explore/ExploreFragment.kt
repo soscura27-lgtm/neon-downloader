@@ -23,6 +23,7 @@ import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
@@ -31,16 +32,21 @@ import android.widget.FrameLayout
 import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.isVisible
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.preference.PreferenceManager
+import androidx.webkit.ScriptHandler
 import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.deniscerri.ytdl.R
 import com.deniscerri.ytdl.database.enums.DownloadType
@@ -48,8 +54,12 @@ import com.deniscerri.ytdl.database.models.CookieItem
 import com.deniscerri.ytdl.database.models.ResultItem
 import com.deniscerri.ytdl.database.viewmodel.CookieViewModel
 import com.deniscerri.ytdl.database.viewmodel.DownloadCardViewModel
+import com.deniscerri.ytdl.database.viewmodel.DownloadProgressViewModel
 import com.deniscerri.ytdl.database.viewmodel.DownloadViewModel
 import com.deniscerri.ytdl.database.viewmodel.ResultViewModel
+import com.deniscerri.ytdl.ui.downloads.QueuePlacementDialog
+import com.deniscerri.ytdl.util.QueuePlacement
+import com.google.android.material.chip.Chip
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -77,11 +87,14 @@ class ExploreFragment : Fragment() {
     private lateinit var downloadViewModel: DownloadViewModel
     private lateinit var downloadCardViewModel: DownloadCardViewModel
     private lateinit var cookieViewModel: CookieViewModel
+    private lateinit var progressViewModel: DownloadProgressViewModel
 
     private var webView: WebView? = null
     private lateinit var searchField: TextInputEditText
     private lateinit var progress: LinearProgressIndicator
     private lateinit var fab: ExtendedFloatingActionButton
+    private lateinit var selectFab: ExtendedFloatingActionButton
+    private lateinit var kindChip: Chip
     private lateinit var errorView: View
     private lateinit var fullscreenContainer: FrameLayout
     private lateinit var accountButton: MaterialButton
@@ -96,6 +109,13 @@ class ExploreFragment : Fragment() {
 
     private var fetchJob: Job? = null
     private var progressDialog: AlertDialog? = null
+
+    private var adBlockScript: ScriptHandler? = null
+
+    // si el formato se cambia desde el selector masivo, el botón de aquí se actualiza solo
+    private val kindListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == DownloadKind.PREF_KEY) showKind()
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -114,10 +134,13 @@ class ExploreFragment : Fragment() {
         downloadViewModel = ViewModelProvider(activity)[DownloadViewModel::class.java]
         downloadCardViewModel = ViewModelProvider(activity)[DownloadCardViewModel::class.java]
         cookieViewModel = ViewModelProvider(activity)[CookieViewModel::class.java]
+        progressViewModel = ViewModelProvider(activity)[DownloadProgressViewModel::class.java]
 
         searchField = view.findViewById(R.id.explore_search)
         progress = view.findViewById(R.id.explore_progress)
         fab = view.findViewById(R.id.explore_fab)
+        selectFab = view.findViewById(R.id.explore_fab_select)
+        kindChip = view.findViewById(R.id.explore_chip_kind)
         errorView = view.findViewById(R.id.explore_error)
         fullscreenContainer = view.findViewById(R.id.explore_fullscreen)
         accountButton = view.findViewById(R.id.explore_account)
@@ -133,10 +156,20 @@ class ExploreFragment : Fragment() {
             webView?.reload()
         }
         fab.setOnClickListener { onFabClick() }
+        selectFab.setOnClickListener { openBulkSelect(currentPage) }
+        kindChip.setOnClickListener {
+            DownloadKind.choose(requireContext(), DownloadKind.load(prefs)) { kind ->
+                DownloadKind.save(prefs, kind)
+                showKind()
+            }
+        }
+        showKind()
+        prefs.registerOnSharedPreferenceChangeListener(kindListener)
 
         setupWebView(view.findViewById(R.id.explore_webview))
         setupBackHandling()
         observeDuplicates()
+        observeDownloadLevel(view)
         updateAccountUi()
     }
 
@@ -163,6 +196,7 @@ class ExploreFragment : Fragment() {
         }
         applyBrowserMode(wv)
         hideWebViewIdentity(wv.settings)
+        applyAdBlock(wv)
 
         wv.webViewClient = ExploreClient()
         wv.webChromeClient = ExploreChromeClient()
@@ -253,6 +287,48 @@ class ExploreFragment : Fragment() {
         webView?.loadUrl(url)
     }
 
+    // ------------------------------------------------------------------------------------------
+    // Bloqueador de anuncios
+    // ------------------------------------------------------------------------------------------
+
+    /** Activa o desactiva el bloqueador según el ajuste y (re)instala el script que se ejecuta al empezar cada página. */
+    private fun applyAdBlock(wv: WebView) {
+        val enabled = prefs.getBoolean(AdBlocker.PREF_ENABLED, true)
+        AdBlocker.enabled = enabled
+
+        adBlockScript?.let { handler -> runCatching { handler.remove() } }
+        adBlockScript = null
+
+        if (enabled && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            adBlockScript = runCatching {
+                WebViewCompat.addDocumentStartJavaScript(
+                    wv,
+                    AdBlocker.script(wv.context),
+                    AdBlocker.ORIGIN_RULES
+                )
+            }.getOrNull()
+        }
+    }
+
+    /**
+     * Si este WebView es demasiado antiguo para ejecutar scripts al empezar la página, se inyecta el mismo
+     * script durante la carga (la limpieza de datos llega más tarde, pero ocultar y omitir anuncios funciona).
+     */
+    private fun injectAdBlockFallback(view: WebView?, url: String?) {
+        if (!AdBlocker.enabled || adBlockScript != null || view == null) return
+        if (!YoutubeUrls.isYoutubeHost(runCatching { Uri.parse(url).host }.getOrNull())) return
+        view.evaluateJavascript(AdBlocker.script(view.context), null)
+    }
+
+    private fun toggleAdBlock() {
+        val wv = webView ?: return
+        val enabled = !prefs.getBoolean(AdBlocker.PREF_ENABLED, true)
+        prefs.edit().putBoolean(AdBlocker.PREF_ENABLED, enabled).apply()
+        applyAdBlock(wv)
+        toast(if (enabled) R.string.explore_adblock_on else R.string.explore_adblock_off)
+        wv.reload()
+    }
+
     private inner class ExploreClient : WebViewClient() {
 
         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -260,11 +336,18 @@ class ExploreFragment : Fragment() {
             return handleNavigation(uri, request.isForMainFrame)
         }
 
+        // Bloqueador de anuncios: las peticiones de publicidad se contestan en vacío
+        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+            if (request == null) return null
+            return AdBlocker.intercept(request)
+        }
+
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
             errorView.visibility = View.GONE
             progress.visibility = View.VISIBLE
             onUrlChanged(url)
+            injectAdBlockFallback(view, url)
         }
 
         override fun onPageFinished(view: WebView?, url: String?) {
@@ -273,6 +356,7 @@ class ExploreFragment : Fragment() {
             onUrlChanged(url ?: view?.url)
             CookieManager.getInstance().flush()
             checkSignIn()
+            injectAdBlockFallback(view, url)
         }
 
         // YouTube cambia de página sin recargar: aquí se entera la app de cada cambio
@@ -316,6 +400,8 @@ class ExploreFragment : Fragment() {
             )
             fullscreenContainer.visibility = View.VISIBLE
             fab.hide()
+            selectFab.hide()
+            kindChip.isVisible = false
         }
 
         override fun onHideCustomView() {
@@ -471,6 +557,11 @@ class ExploreFragment : Fragment() {
         val popup = PopupMenu(requireContext(), anchor)
         popup.menuInflater.inflate(R.menu.explore_menu, popup.menu)
         popup.menu.findItem(R.id.explore_menu_desktop).isChecked = state.desktopMode
+        popup.menu.findItem(R.id.explore_menu_adblock).apply {
+            isChecked = prefs.getBoolean(AdBlocker.PREF_ENABLED, true)
+            title = getString(R.string.explore_adblock_menu, AdBlocker.blockedCount)
+        }
+        popup.menu.findItem(R.id.explore_menu_ask_position).isChecked = prefs.getBoolean(PREF_ASK_POSITION, true)
         popup.menu.findItem(R.id.explore_menu_forward).isEnabled = webView?.canGoForward() == true
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -480,6 +571,11 @@ class ExploreFragment : Fragment() {
                 R.id.explore_menu_forward -> webView?.goForward()
                 R.id.explore_menu_reload -> webView?.reload()
                 R.id.explore_menu_desktop -> toggleDesktopMode()
+                R.id.explore_menu_adblock -> toggleAdBlock()
+                R.id.explore_menu_ask_position -> {
+                    val ask = !prefs.getBoolean(PREF_ASK_POSITION, true)
+                    prefs.edit().putBoolean(PREF_ASK_POSITION, ask).apply()
+                }
                 R.id.explore_menu_copy -> copyLink(currentUrl)
                 R.id.explore_menu_external -> openInExternalBrowser(currentUrl)
             }
@@ -682,21 +778,141 @@ class ExploreFragment : Fragment() {
     // Descargas
     // ------------------------------------------------------------------------------------------
 
+    /** Pone en el botón el formato elegido: "Formato: Audio MP3". */
+    private fun showKind() {
+        if (view == null) return
+        val kind = DownloadKind.load(prefs)
+        kindChip.text = DownloadKind.chipLabel(requireContext(), kind)
+        kindChip.setChipIconResource(kind.iconRes)
+    }
+
     private fun updateFab() {
         if (view == null) return
         val page = currentPage
-        if (!page.isDownloadable || customView != null) {
+        if (customView != null) {
             fab.hide()
+            selectFab.hide()
+            kindChip.isVisible = false
             return
         }
-        fab.text = getString(
+
+        // el botón "Formato" aparece siempre que se pueda descargar algo de la página
+        kindChip.isVisible = page.isDownloadable || page.canChooseVideos
+
+        if (page.isDownloadable) {
+            fab.text = getString(
+                when {
+                    page.kind == YoutubeUrls.Kind.PLAYLIST && page.isMix -> R.string.explore_download_mix
+                    page.kind == YoutubeUrls.Kind.PLAYLIST -> R.string.explore_download_playlist
+                    else -> R.string.explore_download
+                }
+            )
+            fab.show()
+        } else {
+            fab.hide()
+        }
+
+        // "Elegir vídeos": canales, playlists y Mix (también al ver un vídeo que pertenece a una lista)
+        if (page.canChooseVideos) selectFab.show() else selectFab.hide()
+    }
+
+    /**
+     * Abre el selector masivo con la fuente de la página que se está viendo:
+     * un canal (con sus pestañas Vídeos / Shorts / Directos), una playlist o un Mix.
+     */
+    private fun openBulkSelect(page: YoutubeUrls.Page) {
+        val kind: BulkSelectViewModel.SourceKind
+        val url: String
+        var tab = BulkSelectViewModel.Tab.VIDEOS
+        when {
+            page.kind == YoutubeUrls.Kind.CHANNEL && page.channelPath != null -> {
+                kind = BulkSelectViewModel.SourceKind.CHANNEL
+                url = YoutubeUrls.channelUrl(page.channelPath)
+                // si se está viendo la pestaña Shorts o Directos del canal, se abre directamente esa
+                tab = BulkSelectViewModel.Tab.values().firstOrNull { it.path == page.channelTab }
+                    ?: BulkSelectViewModel.Tab.VIDEOS
+            }
+            page.hasList -> {
+                kind = if (page.isMix) {
+                    BulkSelectViewModel.SourceKind.MIX
+                } else {
+                    BulkSelectViewModel.SourceKind.PLAYLIST
+                }
+                url = YoutubeUrls.listUrl(page) ?: return
+            }
+            else -> {
+                toast(R.string.explore_not_downloadable)
+                return
+            }
+        }
+
+        withFreshCookies {
+            val nav = findNavController()
+            if (nav.currentDestination?.id == R.id.exploreFragment) {
+                nav.navigate(
+                    R.id.bulkSelectDialog,
+                    bundleOf(
+                        BulkSelectDialog.ARG_KIND to kind.name,
+                        BulkSelectDialog.ARG_URL to url,
+                        BulkSelectDialog.ARG_TAB to tab.name
+                    )
+                )
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Nivel de descarga global
+    // ------------------------------------------------------------------------------------------
+
+    /** Barra de arriba: porcentaje del lote en curso (cuántas van, cuántas descargando y cuántas esperan). */
+    private fun observeDownloadLevel(root: View) {
+        val strip = root.findViewById<View>(R.id.explore_dl_strip)
+        val percentText = root.findViewById<TextView>(R.id.explore_dl_percent)
+        val detailText = root.findViewById<TextView>(R.id.explore_dl_detail)
+        val bar = root.findViewById<LinearProgressIndicator>(R.id.explore_dl_bar)
+
+        strip.setOnClickListener {
+            val nav = findNavController()
+            if (nav.currentDestination?.id == R.id.exploreFragment) {
+                nav.navigate(R.id.downloadQueueMainFragment)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                progressViewModel.overall.collect { overall ->
+                    if (overall == null) {
+                        strip.visibility = View.GONE
+                        return@collect
+                    }
+                    strip.visibility = View.VISIBLE
+                    percentText.text = getString(R.string.download_percent, overall.percent)
+                    detailText.text = describeLevel(overall)
+                    bar.setProgressCompat(overall.percent, true)
+                }
+            }
+        }
+    }
+
+    private fun describeLevel(overall: DownloadProgressViewModel.Overall): String {
+        val parts = ArrayList<String>(2)
+        parts.add(
             when {
-                page.kind == YoutubeUrls.Kind.PLAYLIST && page.isMix -> R.string.explore_download_mix
-                page.kind == YoutubeUrls.Kind.PLAYLIST -> R.string.explore_download_playlist
-                else -> R.string.explore_download
+                overall.done -> getString(R.string.dl_strip_done, overall.finished, overall.total)
+                overall.active == 0 && overall.waiting == 0 && overall.paused > 0 ->
+                    getString(R.string.dl_strip_paused, overall.finished, overall.total)
+                else -> getString(
+                    R.string.dl_strip_detail,
+                    overall.finished,
+                    overall.total,
+                    overall.active,
+                    overall.waiting
+                )
             }
         )
-        fab.show()
+        if (overall.failed > 0) parts.add(getString(R.string.dl_strip_failed, overall.failed))
+        return parts.joinToString(" · ")
     }
 
     private fun onFabClick() {
@@ -720,11 +936,19 @@ class ExploreFragment : Fragment() {
 
     private fun askVideoOrList(page: YoutubeUrls.Page) {
         val videoId = page.videoId ?: return
-        val options = arrayOf(getString(R.string.explore_download_only_video), listLabel(page))
+        val options = arrayOf(
+            getString(R.string.explore_download_only_video),
+            listLabel(page),
+            getString(R.string.bulk_choose_from_list)
+        )
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.explore_download_choose_title)
             .setItems(options) { _, which ->
-                if (which == 0) downloadVideo(YoutubeUrls.videoUrl(videoId)) else downloadList(page)
+                when (which) {
+                    0 -> downloadVideo(YoutubeUrls.videoUrl(videoId))
+                    1 -> downloadList(page)
+                    else -> openBulkSelect(page)
+                }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -751,7 +975,7 @@ class ExploreFragment : Fragment() {
     private fun showLinkActions(href: String?) {
         if (href.isNullOrBlank()) return
         val page = YoutubeUrls.parse(href)
-        if (!page.isDownloadable) return
+        if (!page.isDownloadable && !page.canChooseVideos) return
 
         val labels = mutableListOf<String>()
         val actions = mutableListOf<() -> Unit>()
@@ -765,6 +989,15 @@ class ExploreFragment : Fragment() {
             labels.add(listLabel(page))
             actions.add { downloadList(page) }
         }
+        if (page.canChooseVideos) {
+            labels.add(
+                getString(
+                    if (page.kind == YoutubeUrls.Kind.CHANNEL) R.string.bulk_choose_from_channel
+                    else R.string.bulk_choose_from_list
+                )
+            )
+            actions.add { openBulkSelect(page) }
+        }
         labels.add(getString(R.string.explore_copy_link))
         actions.add { copyLink(href) }
 
@@ -773,11 +1006,56 @@ class ExploreFragment : Fragment() {
             .show()
     }
 
+    /**
+     * Antes de descargar, si ya hay descargas esperando turno, pregunta en qué lugar de la cola poner esta
+     * ("al final", "la siguiente" o "la 3"). Si la cola está vacía, o el usuario lo desactivó en el menú, sigue
+     * directamente y al final. Cerrar la ventana cancela la descarga.
+     */
+    private fun askQueuePosition(onChosen: (Int) -> Unit) {
+        if (!prefs.getBoolean(PREF_ASK_POSITION, true)) {
+            onChosen(QueuePlacement.END)
+            return
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            val waiting = withContext(Dispatchers.IO) { downloadViewModel.getQueuedCount() }
+            if (!isAdded || view == null) return@launch
+            if (waiting > 0) {
+                QueuePlacementDialog.choose(requireContext(), QueuePlacement.END, onChosen)
+            } else {
+                onChosen(QueuePlacement.END)
+            }
+        }
+    }
+
     private fun downloadVideo(url: String) {
+        askQueuePosition { position ->
+            // END borra cualquier petición vieja de este vídeo; otro valor queda lista para cuando llegue a la cola
+            QueuePlacement.request(listOf(url), position)
+            startVideoDownload(url)
+        }
+    }
+
+    private fun startVideoDownload(url: String) {
+        val kind = DownloadKind.load(prefs)
         withFreshCookies {
-            val type = downloadViewModel.getDownloadType(url = url)
-            if (prefs.getBoolean("download_card", true)) {
-                showSingleDownloadSheet(downloadViewModel.createEmptyResultItem(url), type)
+            if (kind.isAudio) {
+                // el audio se eligió de forma explícita con el botón "Formato": se pone en cola ya, sin hoja de opciones
+                Toast.makeText(
+                    requireContext(),
+                    getString(R.string.kind_audio_started, url),
+                    Toast.LENGTH_SHORT
+                ).show()
+                requireActivity().lifecycleScope.launch(Dispatchers.IO) {
+                    val item = downloadViewModel.createDownloadItemFromResult(
+                        result = downloadViewModel.createEmptyResultItem(url),
+                        givenType = kind.type
+                    )
+                    val container = kind.container
+                    if (container != null && item.type == DownloadType.audio) item.container = container
+                    downloadViewModel.queueDownloads(listOf(item))
+                }
+            } else if (prefs.getBoolean("download_card", true)) {
+                showSingleDownloadSheet(downloadViewModel.createEmptyResultItem(url), kind.type)
             } else {
                 Toast.makeText(
                     requireContext(),
@@ -787,7 +1065,7 @@ class ExploreFragment : Fragment() {
                 requireActivity().lifecycleScope.launch(Dispatchers.IO) {
                     val item = downloadViewModel.createDownloadItemFromResult(
                         result = downloadViewModel.createEmptyResultItem(url),
-                        givenType = type
+                        givenType = kind.type
                     )
                     downloadViewModel.queueDownloads(listOf(item))
                 }
@@ -808,6 +1086,11 @@ class ExploreFragment : Fragment() {
     /** Lee la playlist o el Mix completo y abre la hoja de descarga múltiple (o los pone en cola directamente). */
     private fun downloadList(page: YoutubeUrls.Page) {
         val listUrl = YoutubeUrls.listUrl(page) ?: return
+        if (fetchJob?.isActive == true) return
+        askQueuePosition { position -> readAndDownloadList(page, listUrl, position) }
+    }
+
+    private fun readAndDownloadList(page: YoutubeUrls.Page, listUrl: String, position: Int) {
         if (fetchJob?.isActive == true) return
 
         withFreshCookies {
@@ -837,8 +1120,16 @@ class ExploreFragment : Fragment() {
                     if (ids.isEmpty()) {
                         showListProblem(getString(R.string.explore_list_empty))
                     } else {
+                        // el lugar elegido en la cola vale para todos: se colocan seguidos, en el mismo orden
+                        QueuePlacement.request(items.filter { it.id != 0L }.map { it.url }, position)
                         val showCard = prefs.getBoolean("download_card", true)
-                        downloadViewModel.turnResultItemsToProcessingDownloads(ids, downloadNow = !showCard)
+                        val kind = DownloadKind.load(prefs)
+                        downloadViewModel.turnResultItemsToProcessingDownloads(
+                            ids,
+                            downloadNow = !showCard,
+                            forcedType = kind.type,
+                            forcedAudioContainer = kind.container
+                        )
                         if (showCard) {
                             val nav = findNavController()
                             if (nav.currentDestination?.id == R.id.exploreFragment) {
@@ -925,12 +1216,14 @@ class ExploreFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        if (this::prefs.isInitialized) prefs.unregisterOnSharedPreferenceChangeListener(kindListener)
         fetchJob?.cancel()
         fetchJob = null
         progressDialog?.dismiss()
         progressDialog = null
         exitFullscreen()
         webView?.let { wv ->
+            adBlockScript = null
             runCatching {
                 val bundle = Bundle()
                 wv.saveState(bundle)
@@ -949,6 +1242,7 @@ class ExploreFragment : Fragment() {
     }
 
     companion object {
+        private const val PREF_ASK_POSITION = "explore_ask_queue_position"
         private const val PREF_USE_ACCOUNT = "explore_use_account"
         private const val PREF_ACCOUNT_PROMPTED = "explore_account_prompted"
         private const val COOKIE_DESCRIPTION = "Explorar (cuenta de Google)"

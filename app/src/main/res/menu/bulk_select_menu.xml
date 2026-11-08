@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/bulk_menu_all"
+        android:title="@string/bulk_select_all_visible" />
+    <item
+        android:id="@+id/bulk_menu_first"
+        android:title="@string/bulk_select_first" />
+    <item
+        android:id="@+id/bulk_menu_range"
+        android:title="@string/bulk_select_range" />
+    <item
+        android:id="@+id/bulk_menu_new"
+        android:title="@string/bulk_select_new" />
+    <item
+        android:id="@+id/bulk_menu_invert"
+        android:title="@string/bulk_select_invert" />
+    <item
+        android:id="@+id/bulk_menu_deselect_visible"
+        android:title="@string/bulk_deselect_visible" />
+    <item
+        android:id="@+id/bulk_menu_none"
+        android:title="@string/bulk_select_none" />
+</menu>

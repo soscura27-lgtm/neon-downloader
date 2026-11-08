@@ -139,7 +139,7 @@ class YTDLPUtil(private val context: Context, private val commandTemplateDao: Co
     }
 
     @SuppressLint("RestrictedApi")
-    suspend fun getFromYTDL(query: String, singleItem: Boolean = false, resultsGenerated: suspend (pagedResults: List<ResultItem>) -> Unit): List<ResultItem> {
+    suspend fun getFromYTDL(query: String, singleItem: Boolean = false, approximateDates: Boolean = false, resultsGenerated: suspend (pagedResults: List<ResultItem>) -> Unit): List<ResultItem> {
         val searchEngine = sharedPreferences.getString("search_engine", "ytsearch")
 
         val request : YTDLRequest
@@ -175,6 +175,10 @@ class YTDLPUtil(private val context: Context, private val commandTemplateDao: Co
         }
 
         request.addOption("--lazy-playlist")
+        if (approximateDates && query.isYoutubeURL()) {
+            // fechas aproximadas ("hace 3 meses") de cada vídeo de un canal, para poder filtrar por fecha
+            request.addOption("--extractor-args", "youtubetab:approximate_date")
+        }
         if (query.isYoutubeURL() && MIX_LIST_PARAM.containsMatchIn(query)) {
             // el Mix no se acaba nunca: sin tope yt-dlp seguiría pidiendo vídeos sin parar
             request.addOption("--playlist-end", MIX_MAX_ITEMS.toString())
@@ -346,11 +350,26 @@ class YTDLPUtil(private val context: Context, private val commandTemplateDao: Co
                 playlistIndex = playlistIndex,
                 availableSubtitles = availableSubtitles
             )
+            res.viewCount = jsonObject.optLong("view_count", -1L)
+            res.uploadTimestamp = parseUploadTimestamp(jsonObject)
 
             items.add(res)
         }
 
         return items
+    }
+
+    /** Fecha de subida en segundos desde 1970: "timestamp" o, si no hay, "upload_date" (AAAAMMDD). -1 si no existe. */
+    private fun parseUploadTimestamp(json: JSONObject): Long {
+        val timestamp = json.optLong("timestamp", -1L)
+        if (timestamp > 0) return timestamp
+        val date = json.optString("upload_date", "")
+        if (date.length != 8) return -1L
+        return runCatching {
+            val format = java.text.SimpleDateFormat("yyyyMMdd", Locale.US)
+            format.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            (format.parse(date)?.time ?: return -1L) / 1000
+        }.getOrDefault(-1L)
     }
 
     suspend fun getYoutubeWatchLater() : ArrayList<ResultItem> {

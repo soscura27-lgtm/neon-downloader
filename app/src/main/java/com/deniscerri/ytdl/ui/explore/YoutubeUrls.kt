@@ -36,14 +36,18 @@ object YoutubeUrls {
         /** La página de una playlist. */
         PLAYLIST,
 
-        /** Un canal (no se descarga desde el botón). */
+        /** Un canal: no tiene botón de descarga directa, pero se pueden elegir sus vídeos. */
         CHANNEL
     }
 
     data class Page(
         val kind: Kind,
         val videoId: String? = null,
-        val listId: String? = null
+        val listId: String? = null,
+        /** "@usuario", "channel/UC..." , "c/nombre" o "user/nombre" (solo en canales). */
+        val channelPath: String? = null,
+        /** Pestaña del canal que se está viendo: "videos", "shorts" o "streams" (null = ninguna en concreto). */
+        val channelTab: String? = null
     ) {
         val isDownloadable: Boolean
             get() = kind == Kind.VIDEO || kind == Kind.VIDEO_IN_LIST || kind == Kind.PLAYLIST
@@ -53,6 +57,10 @@ object YoutubeUrls {
 
         val isMix: Boolean
             get() = hasList && isMixId(listId!!)
+
+        /** Se pueden elegir vídeos sueltos de aquí (canal, playlist o Mix). */
+        val canChooseVideos: Boolean
+            get() = (kind == Kind.CHANNEL && channelPath != null) || hasList
     }
 
     private val VIDEO_ID = Regex("[A-Za-z0-9_-]{11}")
@@ -109,10 +117,42 @@ object YoutubeUrls {
             video != null && list != null -> Page(Kind.VIDEO_IN_LIST, video, list)
             video != null -> Page(Kind.VIDEO, video)
             list != null && (path == "/playlist" || path == "/watch") -> Page(Kind.PLAYLIST, null, list)
-            path.startsWith("/@") || path.startsWith("/channel/") ||
-                    path.startsWith("/c/") || path.startsWith("/user/") -> Page(Kind.CHANNEL)
-            else -> Page(Kind.NONE)
+            else -> {
+                // path ya viene decodificado: "/%40usuario" y "/@usuario" son el mismo canal
+                val channel = channelPathOf(path)
+                if (channel != null) {
+                    Page(Kind.CHANNEL, channelPath = channel, channelTab = channelTabOf(path))
+                } else {
+                    Page(Kind.NONE)
+                }
+            }
         }
+    }
+
+    /** "/@usuario/videos" -> "@usuario"; "/channel/UCxxxx/featured" -> "channel/UCxxxx"; otra cosa -> null. */
+    private fun channelPathOf(path: String): String? {
+        val segments = path.trim('/').split('/')
+        val first = segments.firstOrNull().orEmpty()
+        return when {
+            first.startsWith("@") && first.length > 1 -> first
+            (first == "channel" || first == "c" || first == "user") &&
+                    segments.size >= 2 && segments[1].isNotEmpty() -> "$first/${segments[1]}"
+            else -> null
+        }
+    }
+
+    /** "/@usuario/shorts" -> "shorts"; "/channel/UCxxxx/streams" -> "streams"; otra cosa -> null. */
+    private fun channelTabOf(path: String): String? {
+        val segments = path.trim('/').split('/')
+        val first = segments.firstOrNull().orEmpty()
+        val tab = if (first.startsWith("@")) segments.getOrNull(1) else segments.getOrNull(2)
+        return tab?.lowercase(Locale.ROOT)?.takeIf { it == "videos" || it == "shorts" || it == "streams" }
+    }
+
+    /** Dirección base del canal; a ella se añade /videos, /shorts o /streams. */
+    fun channelUrl(channelPath: String): String {
+        val encoded = channelPath.split('/').joinToString("/") { Uri.encode(it, "@") }
+        return "https://www.youtube.com/$encoded"
     }
 
     fun videoUrl(videoId: String): String = "https://www.youtube.com/watch?v=$videoId"

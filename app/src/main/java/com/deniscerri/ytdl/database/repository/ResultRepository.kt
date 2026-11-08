@@ -242,6 +242,22 @@ class ResultRepository(private val resultDao: ResultDao, commandTemplateDao: Com
     }
 
     /**
+     * Lee un canal, una playlist o un Mix con yt-dlp y va entregando los vídeos según llegan, ya guardados
+     * en la base de datos (con su id). Es la fuente del selector masivo: no espera a tener la lista completa.
+     */
+    suspend fun streamList(url: String, approximateDates: Boolean, onItems: suspend (List<ResultItem>) -> Unit) {
+        deleteAll()
+        ytdlpUtil.getFromYTDL(url, approximateDates = approximateDates) {
+            currentCoroutineContext().ensureActive()
+            val ids = resultDao.insertMultiple(it)
+            ids.forEachIndexed { index, id ->
+                it[index].id = id
+            }
+            onItems(it)
+        }
+    }
+
+    /**
      * Mix de YouTube (list=RD...). Siempre se lee con yt-dlp: NewPipe solo devolvería el vídeo
      * con el que empieza el Mix, y yt-dlp corta la lectura en YTDLPUtil.MIX_MAX_ITEMS vídeos
      * porque un Mix no tiene final. La dirección debe ser del tipo watch?v=...&list=RD...

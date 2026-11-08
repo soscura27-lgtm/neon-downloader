@@ -236,6 +236,20 @@ class QueuedDownloadsFragment : Fragment(), QueuedDownloadAdapter.OnItemClickLis
                     }
                     true
                 }
+                R.id.move_to_position -> {
+                    QueuePlacementDialog.askPosition(requireContext(), R.string.queue_move_to_position, 3) { position ->
+                        lifecycleScope.launch {
+                            val selectedObjects = getSelectedIDs()
+                            adapter.clearCheckedItems()
+                            withContext(Dispatchers.IO){
+                                downloadViewModel.putAtPositionInQueue(selectedObjects, position)
+                            }
+                            Toast.makeText(requireContext(), getString(R.string.queue_moved_to_position, position), Toast.LENGTH_SHORT).show()
+                            actionMode?.finish()
+                        }
+                    }
+                    true
+                }
                 R.id.copy_urls -> {
                     lifecycleScope.launch {
                         val selectedObjects = getSelectedIDs()

@@ -79,6 +79,70 @@
 
         </LinearLayout>
 
+        <!-- Nivel de descarga global: % del lote, cuántas van y cuántas faltan. Toca para ver la cola. -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/explore_dl_strip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="6dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone"
+            app:cardBackgroundColor="?attr/colorSecondaryContainer"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="0dp"
+            app:strokeColor="?attr/colorPrimary"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="14dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="10dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/explore_dl_percent"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="64dp"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/explore_dl_detail"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:maxLines="2"
+                        android:textColor="?attr/colorOnSecondaryContainer"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/explore_dl_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:indeterminate="false"
+                    android:max="100"
+                    app:trackCornerRadius="4dp"
+                    app:trackThickness="6dp" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/explore_progress"
             android:layout_width="match_parent"
@@ -138,16 +202,52 @@
 
     </LinearLayout>
 
-    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-        android:id="@+id/explore_fab"
+    <!-- Botones flotantes: "Elegir vídeos" (canal, playlist, Mix) encima de "Descargar" -->
+    <LinearLayout
+        android:id="@+id/explore_fabs"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="72dp"
-        android:text="@string/explore_download"
-        android:visibility="gone"
-        app:icon="@drawable/baseline_download_24" />
+        android:orientation="vertical">
+
+        <!-- Qué se descarga: vídeo, audio MP3 o audio original (vale para todo lo de esta pantalla) -->
+        <com.google.android.material.chip.Chip
+            android:id="@+id/explore_chip_kind"
+            style="@style/Widget.Material3.Chip.Assist"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginBottom="8dp"
+            android:textColor="?attr/colorOnSecondaryContainer"
+            android:visibility="gone"
+            app:chipBackgroundColor="?attr/colorSecondaryContainer"
+            app:chipIconVisible="true" />
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/explore_fab_select"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:text="@string/bulk_choose_videos"
+            android:textColor="?attr/colorOnSecondaryContainer"
+            android:visibility="gone"
+            app:backgroundTint="?attr/colorSecondaryContainer"
+            app:icon="@drawable/ic_checklist"
+            app:iconTint="?attr/colorOnSecondaryContainer" />
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/explore_fab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginTop="12dp"
+            android:text="@string/explore_download"
+            android:visibility="gone"
+            app:icon="@drawable/baseline_download_24" />
+
+    </LinearLayout>
 
     <!-- Pantalla completa para el vídeo que se está reproduciendo -->
     <FrameLayout

@@ -29,6 +29,11 @@
         android:title="@string/move_bottom" />
 
     <item
+        android:id="@+id/move_to_position"
+        android:title="@string/queue_move_to_position"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/select_all"
         android:title="@string/select_all"
         app:showAsAction="never" />

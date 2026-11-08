@@ -3,7 +3,9 @@ package com.deniscerri.ytdl.database.models
 import android.os.Parcelable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Ignore
 import androidx.room.PrimaryKey
+import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
 
 @Entity(tableName = "results")
@@ -29,4 +31,14 @@ data class ResultItem(
     var creationTime: Long = System.currentTimeMillis() / 1000,
     @ColumnInfo(defaultValue = "[]")
     var availableSubtitles: List<String> = listOf()
-) : Parcelable
+) : Parcelable {
+    /** Visualizaciones (solo en memoria, para el selector masivo; -1 si no se conocen). */
+    @Ignore
+    @IgnoredOnParcel
+    var viewCount: Long = -1L
+
+    /** Fecha de subida aproximada en segundos desde 1970 (solo en memoria; -1 si no se conoce). */
+    @Ignore
+    @IgnoredOnParcel
+    var uploadTimestamp: Long = -1L
+}

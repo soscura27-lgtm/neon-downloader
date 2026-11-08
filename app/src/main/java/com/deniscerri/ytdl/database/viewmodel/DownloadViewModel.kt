@@ -725,7 +725,17 @@ class DownloadViewModel(private val application: Application) : AndroidViewModel
     }
 
 
-    fun turnResultItemsToProcessingDownloads(itemIDs: List<Long>, downloadNow: Boolean = false) = viewModelScope.launch(Dispatchers.IO) {
+    /**
+     * [forcedType] y [forcedAudioContainer] vienen de Explorar y del selector masivo ("descargar como audio MP3"):
+     * si se indican, todos los elementos salen de ese tipo en vez del tipo preferido de los ajustes.
+     * El contenedor solo se aplica a descargas de audio ("mp3"; "" = el audio original sin convertir).
+     */
+    fun turnResultItemsToProcessingDownloads(
+        itemIDs: List<Long>,
+        downloadNow: Boolean = false,
+        forcedType: DownloadType? = null,
+        forcedAudioContainer: String? = null
+    ) = viewModelScope.launch(Dispatchers.IO) {
         val job = viewModelScope.launch(Dispatchers.IO) {
             repository.deleteProcessing()
             processingItems.emit(true)
@@ -733,10 +743,11 @@ class DownloadViewModel(private val application: Application) : AndroidViewModel
                 val toInsert = mutableListOf<DownloadItem>()
                 itemIDs.forEachIndexed { index, id ->
                     val item = resultRepository.getItemByID(id) ?: return@forEachIndexed
-                    val preferredType = getDownloadType(url = item.url).toString()
-                    val downloadItem = createDownloadItemFromResult(result = item, givenType = DownloadType.valueOf(
-                        preferredType
-                    ))
+                    val preferredType = forcedType ?: DownloadType.valueOf(getDownloadType(url = item.url).toString())
+                    val downloadItem = createDownloadItemFromResult(result = item, givenType = preferredType)
+                    if (forcedAudioContainer != null && downloadItem.type == DownloadType.audio) {
+                        downloadItem.container = forcedAudioContainer
+                    }
                     downloadItem.status = DownloadRepository.Status.Processing.toString()
                     downloadItem.rowNumber = index + 1
 
@@ -876,6 +887,14 @@ class DownloadViewModel(private val application: Application) : AndroidViewModel
 
     suspend fun putAtBottomOfQueue(ids: List<Long>) {
         dao.putAtBottomOfQueue(ids)
+    }
+
+    /** Cuántas descargas esperan turno (sin contar las que ya están en marcha). */
+    fun getQueuedCount() : Int = dao.getQueuedDownloadsCount()
+
+    /** Mueve elementos que ya están en la cola a un lugar concreto: 1 = el siguiente en empezar, 2 = el segundo... */
+    suspend fun putAtPositionInQueue(ids: List<Long>, position: Int) {
+        dao.putAtPositionInQueue(ids, position)
     }
 
 

@@ -112,6 +112,11 @@ class ActiveDownloadAdapter(onItemClickListener: OnItemClickListener, activity: 
             onItemClickListener.onOutputClick(item)
         }
 
+        // PERCENT ----------------------------------------------------
+        // el número sale de la misma barra, así que no parpadea cuando la lista se vuelve a pintar
+        val percent = card.findViewById<TextView>(R.id.percent)
+        percent.tag = "${item.id}##percent"
+
         // CANCEL BUTTON ----------------------------------
         val cancelButton = card.findViewById<MaterialButton>(R.id.active_download_delete)
         if (cancelButton.hasOnClickListeners()) cancelButton.setOnClickListener(null)
@@ -143,6 +148,11 @@ class ActiveDownloadAdapter(onItemClickListener: OnItemClickListener, activity: 
         }else{
             progressBar.isIndeterminate = progressBar.progress <= 0
             cancelButton.isEnabled = true
+        }
+        percent.text = if (!isPaused && progressBar.progress > 0) {
+            activity.getString(R.string.download_percent, progressBar.progress)
+        } else {
+            ""
         }
     }
     interface OnItemClickListener {

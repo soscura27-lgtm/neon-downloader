@@ -10,6 +10,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
 import com.deniscerri.ytdl.database.models.DownloadItem
+import com.deniscerri.ytdl.database.models.QueueSlot
 import com.deniscerri.ytdl.database.models.DownloadItemConfigureMultiple
 import com.deniscerri.ytdl.database.models.DownloadItemSimple
 import com.deniscerri.ytdl.database.models.DownloadSizeMetadata
@@ -44,6 +45,16 @@ interface DownloadDao {
 
     @Query("SELECT id FROM downloads WHERE status = 'Processing'")
     fun getProcessingDownloadsIds() : Flow<List<Long>>
+
+    // Estos tres alimentan el indicador de porcentaje global (DownloadProgressViewModel): solo ids, es ligero
+    @Query("SELECT id FROM downloads WHERE status = 'Active'")
+    fun getActiveDownloadIdsFlow() : Flow<List<Long>>
+
+    @Query("SELECT id FROM downloads WHERE status in ('Queued', 'QueuedPaused')")
+    fun getQueuedDownloadIdsFlow() : Flow<List<Long>>
+
+    @Query("SELECT id FROM downloads WHERE status = 'Paused'")
+    fun getPausedDownloadIdsFlow() : Flow<List<Long>>
 
     @Query("SELECT id, type, format, allFormats, videoPreferences FROM downloads WHERE status = 'Processing'")
     fun getProcessingSizeMetadata(): Flow<List<DownloadSizeMetadata>>
@@ -156,6 +167,9 @@ interface DownloadDao {
 
     @Query("SELECT id FROM downloads WHERE status in ('Queued', 'QueuedPaused') ORDER BY downloadStartTime, queueOrder, id")
     fun getQueuedDownloadsListIDs() : List<Long>
+
+    @Query("SELECT COUNT(*) FROM downloads WHERE status in ('Queued', 'QueuedPaused')")
+    fun getQueuedDownloadsCount() : Int
 
     @RewriteQueriesToDropUnusedColumns
     @Query("SELECT * FROM downloads WHERE status='Cancelled' ORDER BY id DESC")
@@ -416,6 +430,47 @@ interface DownloadDao {
             updateQueueOrder(lastQueueOrder, it)
         }
     }
+
+    /** Las que se reanudan quedan con hora de inicio -1: se igualan a 0 para que el orden lo marque solo queueOrder. */
+    @Query("UPDATE downloads SET downloadStartTime = 0 WHERE status in ('Queued', 'QueuedPaused') AND downloadStartTime < 0")
+    suspend fun resetNegativeStartTimesInQueue()
+
+    /**
+     * Pone los elementos [ids] (que ya están en la cola) en el lugar [position]: 1 = el siguiente en empezar,
+     * 2 = el segundo... Si la posición es mayor que la cola, quedan al final. El resto mantiene su orden.
+     */
+    @Transaction
+    suspend fun putAtPositionInQueue(ids: List<Long>, position: Int) {
+        if (ids.isEmpty()) return
+
+        // en el mismo orden en que los ve la descarga: hora de inicio, orden de cola, id
+        val slots = getQueueSlots()
+        val queue = slots.map { it.id }
+        val inQueue = queue.toHashSet()
+        val moving = ids.distinct().filter { inQueue.contains(it) }
+        if (moving.isEmpty()) return
+
+        val movingSet = moving.toHashSet()
+        val others = queue.filter { !movingSet.contains(it) }
+        val index = (position - 1).coerceIn(0, others.size)
+
+        val ordered = ArrayList<Long>(queue.size)
+        ordered.addAll(others.subList(0, index))
+        ordered.addAll(moving)
+        ordered.addAll(others.subList(index, others.size))
+
+        val currentOrder = HashMap<Long, Int>(slots.size * 2)
+        slots.forEach { currentOrder[it.id] = it.queueOrder }
+
+        resetNegativeStartTimesInQueue()
+        ordered.forEachIndexed { i, id ->
+            // solo se escribe lo que cambia de sitio
+            if (currentOrder[id] != i) updateQueueOrder(i, id)
+        }
+    }
+
+    @Query("SELECT id, queueOrder FROM downloads WHERE status in ('Queued', 'QueuedPaused') ORDER BY downloadStartTime, queueOrder, id")
+    fun getQueueSlots() : List<QueueSlot>
 
     @Transaction
     suspend fun putQueueDownloadAtPosition(mutableIds: MutableList<Long>, startIdx: Int, endIdx: Int) {

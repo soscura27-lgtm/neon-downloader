@@ -106,11 +106,17 @@ class ActiveDownloadsFragment : Fragment(), ActiveDownloadAdapter.OnItemClickLis
                 WorkerEventBus.events.collectLatest { event ->
                     val progressBar = requireView().findViewWithTag<LinearProgressIndicator>("${event.downloadItemID}##progress")
                     val outputText = requireView().findViewWithTag<TextView>("${event.downloadItemID}##output")
+                    val percentText = requireView().findViewWithTag<TextView>("${event.downloadItemID}##percent")
 
                     requireActivity().runOnUiThread {
                         try {
                             progressBar?.setProgressCompat(event.progress, true)
                             outputText?.text = event.output
+                            percentText?.text = if (event.progress > 0) {
+                                getString(R.string.download_percent, event.progress.coerceIn(0, 100))
+                            } else {
+                                ""
+                            }
                         }catch (ignored: Exception) {}
                     }
                 }

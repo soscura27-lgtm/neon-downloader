@@ -209,4 +209,15 @@
         android:id="@+id/downloadsAlreadyExistDialog"
         android:name="com.deniscerri.ytdl.ui.downloadcard.DownloadsAlreadyExistDialog"
         android:label="DownloadsAlreadyExistDialog" />
+    <dialog
+        android:id="@+id/bulkSelectDialog"
+        android:name="com.deniscerri.ytdl.ui.explore.BulkSelectDialog"
+        android:label="BulkSelectDialog" >
+        <action
+            android:id="@+id/action_bulkSelectDialog_to_downloadMultipleBottomSheetDialog2"
+            app:destination="@id/downloadMultipleBottomSheetDialog2"
+            app:launchSingleTop="true"
+            app:popUpTo="@id/bulkSelectDialog"
+            app:popUpToInclusive="true" />
+    </dialog>
 </navigation>

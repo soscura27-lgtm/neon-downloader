@@ -257,7 +257,18 @@ class DownloadRepository(private val downloadDao: DownloadDao) {
                 earliestStart.downloadStartTime.minus(currentTime)
             } else 0
             if (delay <= 60000L) delay = 0L
-            inputData.putLongArray("priority_item_ids", queuedItems.take(20).map { it.id }.toLongArray())
+
+            // Solo llevan prioridad fija las programadas y las que se piden "ahora mismo" (continueAfterPriorityItems = false).
+            // Las demás siguen el orden de la cola (queueOrder): así "que sea la siguiente" o "la 3" se cumple de verdad,
+            // y también la lista que ve el usuario coincide con lo que se descarga.
+            val priorityItems = if (continueAfterPriorityItems) {
+                queuedItems.filter { it.downloadStartTime > 0L }
+            } else {
+                queuedItems
+            }
+            if (priorityItems.isNotEmpty()) {
+                inputData.putLongArray("priority_item_ids", priorityItems.take(20).map { it.id }.toLongArray())
+            }
         }
 
         val useAlarmForScheduling = sharedPreferences.getBoolean("use_alarm_for_scheduling", false)
