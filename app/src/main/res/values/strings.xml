@@ -841,4 +841,27 @@
     <string name="kind_mp3_option">Audio MP3 (converted, plays anywhere)</string>
     <string name="kind_audio_option">Original audio (m4a/opus, faster, not converted)</string>
     <string name="kind_audio_started">Downloading audio: %1$s</string>
+
+    <!-- Escuchar solo audio, en segundo plano -->
+    <string name="music_listen">Listen</string>
+    <string name="music_listen_title">Listen to audio only</string>
+    <string name="music_this_video">Only this video</string>
+    <string name="music_whole_list">The whole list (from this video)</string>
+    <string name="music_whole_mix">The whole Mix (up to %1$d videos, from this video)</string>
+    <string name="music_starting">Starting audio. It keeps playing with the screen off.</string>
+    <string name="music_error">Couldn\'t play the audio: %1$s</string>
+    <string name="music_prev">Previous</string>
+    <string name="music_play_pause">Play / pause</string>
+    <string name="music_next">Next</string>
+    <string name="music_stop">Stop</string>
+    <string name="music_loading">Loading audio…</string>
+    <string name="music_listen_link">Listen to audio only</string>
+    <string name="music_channel_name">Audio playback</string>
+    <string name="music_no_audio_url">No audio found for this video</string>
+    <string name="music_mode_now">Play now (replaces the audio queue)</string>
+    <string name="music_mode_next">Play next</string>
+    <string name="music_mode_end">Add to the end of the audio queue</string>
+    <string name="music_added_next">It will play next</string>
+    <string name="music_added_end">Added to the audio queue</string>
+    <string name="music_title_loading">Loading… %1$s</string>
 </resources>

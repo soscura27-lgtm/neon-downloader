@@ -740,6 +740,38 @@ class YTDLPUtil(private val context: Context, private val commandTemplateDao: Co
             return Result.failure(e)
         }
     }
+    /**
+     * Dirección directa del mejor audio de un vídeo, para escucharlo en streaming sin descargarlo
+     * (reproductor en segundo plano). Las direcciones de YouTube caducan y van ligadas a la conexión,
+     * por eso se piden justo antes de reproducir y quien las guarde debe volver a pedirlas pasado un rato.
+     */
+    suspend fun getAudioStreamUrl(url: String) : Result<String> {
+        try {
+            val request = YTDLRequest(url)
+            request.addOption("--print", "urls")
+            // un archivo https directo si lo hay (permite saltar a cualquier punto de la pista); si no, lo mejor que haya
+            request.addOption("-f", "ba[protocol=https]/ba/b")
+            request.addOption("--no-playlist")
+            request.applyDefaultOptionsForFetchingData(url)
+            if (url.isYoutubeURL()) {
+                request.setYoutubeExtractorArgs(url)
+            }
+
+            val ytdlResponse = RuntimeManager.getInstance().runKillable { processId ->
+                RuntimeManager.getInstance().execute(request, processId)
+            }
+            val link = ytdlResponse.out
+                .lineSequence()
+                .map { it.trim() }
+                .firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+                ?: return Result.failure(IllegalStateException(context.getString(R.string.music_no_audio_url)))
+            return Result.success(link)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            return Result.failure(e)
+        }
+    }
+
     fun getVersion(context: Context, channel: String) : String {
         val prefVersion = if (listOf("stable", "nightly", "master").contains(channel)) {
             RuntimeManager.getInstance().version(context) ?: ""

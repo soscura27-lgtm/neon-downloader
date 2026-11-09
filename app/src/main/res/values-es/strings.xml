@@ -788,4 +788,27 @@
     <string name="kind_mp3_option">Audio MP3 (convertido, suena en cualquier aparato)</string>
     <string name="kind_audio_option">Audio original (m4a/opus, más rápido, sin convertir)</string>
     <string name="kind_audio_started">Descargando audio: %1$s</string>
+
+    <!-- Escuchar solo audio, en segundo plano -->
+    <string name="music_listen">Escuchar</string>
+    <string name="music_listen_title">Escuchar solo audio</string>
+    <string name="music_this_video">Solo este vídeo</string>
+    <string name="music_whole_list">Toda la lista (desde este vídeo)</string>
+    <string name="music_whole_mix">Todo el Mix (hasta %1$d vídeos, desde este vídeo)</string>
+    <string name="music_starting">Iniciando el audio. Sigue sonando con la pantalla apagada.</string>
+    <string name="music_error">No se pudo reproducir el audio: %1$s</string>
+    <string name="music_prev">Anterior</string>
+    <string name="music_play_pause">Reproducir / pausar</string>
+    <string name="music_next">Siguiente</string>
+    <string name="music_stop">Detener</string>
+    <string name="music_loading">Cargando audio…</string>
+    <string name="music_listen_link">Escuchar solo audio</string>
+    <string name="music_channel_name">Reproducción de audio</string>
+    <string name="music_no_audio_url">No se encontró el audio de este vídeo</string>
+    <string name="music_mode_now">Reproducir ahora (reemplaza la cola de audio)</string>
+    <string name="music_mode_next">Reproducir a continuación</string>
+    <string name="music_mode_end">Añadir al final de la cola de audio</string>
+    <string name="music_added_next">Se reproduce a continuación</string>
+    <string name="music_added_end">Añadido a la cola de audio</string>
+    <string name="music_title_loading">Cargando… %1$s</string>
 </resources>

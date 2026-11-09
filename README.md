@@ -11,6 +11,21 @@ cian y naranja neón, tipografía Orbitron y fondo espacial). Está basada en
   audio, hilos por descarga (fragmentos concurrentes), descargas simultáneas, aria2c, límite de
   velocidad y tamaño de búfer.
 - Valores por defecto: calidad "mejor", 4 hilos por descarga y 2 descargas simultáneas.
+- **Explorar**: pestaña con YouTube dentro de la app (buscador, suscripciones, biblioteca y, si
+  quieres, tu cuenta de Google) con un botón de descarga siempre a mano.
+- **Bloqueador de anuncios** propio en Explorar (peticiones de publicidad, anuncios en pantalla y
+  salto de los anuncios del reproductor). Se activa y desactiva desde el menú ⋮.
+- Descarga de **playlist o Mix completos** con un toque.
+- **Selector masivo** para un canal (Vídeos / Shorts / Directos), una playlist o un Mix: buscar,
+  filtrar por duración, fecha o "no descargados", ordenar y elegir todo, los primeros N, un rango
+  ("del 20 al 80") o vídeo por vídeo.
+- **Formato** a elegir en Explorar y en el selector: Vídeo, **Audio MP3** o audio original.
+- **Nivel de descarga**: porcentaje global en Explorar y porcentaje en cada descarga activa.
+- **Escuchar** en Explorar: solo el audio del vídeo, la playlist o el Mix que estés viendo, sin vídeo y en
+  segundo plano (sigue sonando con la pantalla apagada, con notificación y controles). Se puede añadir
+  a una cola de audio (ahora, a continuación o al final).
+- **Lugar en la cola**: al descargar puedes pedir "la siguiente" o "la posición 3", y en la pantalla
+  de la cola puedes mover lo seleccionado a la posición que quieras.
 - Instala aparte de YTDLnis original: su paquete es `com.diego.neondownloader`.
 
 El resumen técnico de lo que cambió está en [CHANGES.md](CHANGES.md); los créditos y licencias en

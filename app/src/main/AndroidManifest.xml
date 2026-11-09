@@ -26,6 +26,9 @@
 <!--    foreground service permission for android 14 and up-->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+<!--    reproductor de audio en segundo plano (Explorar → Escuchar)-->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <queries>
         <!-- YTDLnis recognized packages -->
         <package android:name="com.deniscerri.ytdl.python" />
@@ -613,6 +616,15 @@
             android:name=".services.TerminalSessionService"
             android:foregroundServiceType="specialUse"
             android:exported="false" />
+
+        <service
+            android:name=".services.MusicService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <service
             android:name="androidx.room.MultiInstanceInvalidationService"

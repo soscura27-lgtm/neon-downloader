@@ -41,6 +41,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.media3.common.MediaItem
 import androidx.navigation.fragment.findNavController
 import androidx.preference.PreferenceManager
 import androidx.webkit.ScriptHandler
@@ -73,6 +74,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.util.Locale
 
 /**
@@ -94,6 +96,8 @@ class ExploreFragment : Fragment() {
     private lateinit var progress: LinearProgressIndicator
     private lateinit var fab: ExtendedFloatingActionButton
     private lateinit var selectFab: ExtendedFloatingActionButton
+    private lateinit var listenFab: ExtendedFloatingActionButton
+    private lateinit var player: ExplorePlayer
     private lateinit var kindChip: Chip
     private lateinit var errorView: View
     private lateinit var fullscreenContainer: FrameLayout
@@ -140,6 +144,7 @@ class ExploreFragment : Fragment() {
         progress = view.findViewById(R.id.explore_progress)
         fab = view.findViewById(R.id.explore_fab)
         selectFab = view.findViewById(R.id.explore_fab_select)
+        listenFab = view.findViewById(R.id.explore_fab_listen)
         kindChip = view.findViewById(R.id.explore_chip_kind)
         errorView = view.findViewById(R.id.explore_error)
         fullscreenContainer = view.findViewById(R.id.explore_fullscreen)
@@ -157,6 +162,20 @@ class ExploreFragment : Fragment() {
         }
         fab.setOnClickListener { onFabClick() }
         selectFab.setOnClickListener { openBulkSelect(currentPage) }
+        listenFab.setOnClickListener { onListenClick() }
+        player = ExplorePlayer(
+            context = requireContext(),
+            bar = view.findViewById(R.id.explore_player_bar),
+            title = view.findViewById(R.id.explore_player_title),
+            previous = view.findViewById(R.id.explore_player_prev),
+            playPause = view.findViewById(R.id.explore_player_play),
+            next = view.findViewById(R.id.explore_player_next),
+            stop = view.findViewById(R.id.explore_player_stop),
+            // si se reanuda el audio, el vídeo de la página se calla para que no suenen los dos a la vez
+            onResumeRequested = { pausePage { } },
+            onProblem = { reason -> toastText(getString(R.string.music_error, reason)) }
+        )
+        viewLifecycleOwner.lifecycle.addObserver(player)
         kindChip.setOnClickListener {
             DownloadKind.choose(requireContext(), DownloadKind.load(prefs)) { kind ->
                 DownloadKind.save(prefs, kind)
@@ -401,6 +420,7 @@ class ExploreFragment : Fragment() {
             fullscreenContainer.visibility = View.VISIBLE
             fab.hide()
             selectFab.hide()
+            listenFab.hide()
             kindChip.isVisible = false
         }
 
@@ -792,6 +812,7 @@ class ExploreFragment : Fragment() {
         if (customView != null) {
             fab.hide()
             selectFab.hide()
+            listenFab.hide()
             kindChip.isVisible = false
             return
         }
@@ -814,6 +835,9 @@ class ExploreFragment : Fragment() {
 
         // "Elegir vídeos": canales, playlists y Mix (también al ver un vídeo que pertenece a una lista)
         if (page.canChooseVideos) selectFab.show() else selectFab.hide()
+
+        // "Escuchar": solo el audio, en segundo plano (donde se puede descargar algo, se puede escuchar)
+        if (page.isDownloadable) listenFab.show() else listenFab.hide()
     }
 
     /**
@@ -984,6 +1008,8 @@ class ExploreFragment : Fragment() {
         if (videoId != null) {
             labels.add(getString(R.string.explore_download_video))
             actions.add { downloadVideo(YoutubeUrls.videoUrl(videoId)) }
+            labels.add(getString(R.string.music_listen_link))
+            actions.add { listenLink(videoId) }
         }
         if (page.hasList) {
             labels.add(listLabel(page))
@@ -1091,6 +1117,45 @@ class ExploreFragment : Fragment() {
     }
 
     private fun readAndDownloadList(page: YoutubeUrls.Page, listUrl: String, position: Int) {
+        readList(page, listUrl, saveInDatabase = true) { items ->
+            val ids = items.map { it.id }.filter { it != 0L }
+            if (ids.isEmpty()) {
+                showListProblem(getString(R.string.explore_list_empty))
+                return@readList
+            }
+
+            // el lugar elegido en la cola vale para todos: se colocan seguidos, en el mismo orden
+            QueuePlacement.request(items.filter { it.id != 0L }.map { it.url }, position)
+            val showCard = prefs.getBoolean("download_card", true)
+            val kind = DownloadKind.load(prefs)
+            downloadViewModel.turnResultItemsToProcessingDownloads(
+                ids,
+                downloadNow = !showCard,
+                forcedType = kind.type,
+                forcedAudioContainer = kind.container
+            )
+            if (showCard) {
+                val nav = findNavController()
+                if (nav.currentDestination?.id == R.id.exploreFragment) {
+                    nav.navigate(R.id.downloadMultipleBottomSheetDialog2)
+                }
+            } else {
+                toast(R.string.downloading)
+            }
+        }
+    }
+
+    /**
+     * Lee la playlist o el Mix completos (con la ventana de progreso y el botón cancelar) y entrega los vídeos a
+     * [onItems]. Para descargar se guardan en la base de datos, porque hacen falta sus ids; para escuchar no se
+     * toca la base de datos.
+     */
+    private fun readList(
+        page: YoutubeUrls.Page,
+        listUrl: String,
+        saveInDatabase: Boolean,
+        onItems: suspend (List<ResultItem>) -> Unit
+    ) {
         if (fetchJob?.isActive == true) return
 
         withFreshCookies {
@@ -1109,36 +1174,21 @@ class ExploreFragment : Fragment() {
                     val items = withContext(Dispatchers.IO) {
                         if (page.isMix) {
                             // un Mix solo se lee bien con yt-dlp y con tope (no tiene final)
-                            resultViewModel.repository.getYoutubeMix(listUrl, resetResults = true)
+                            resultViewModel.repository.getYoutubeMix(
+                                listUrl,
+                                resetResults = saveInDatabase,
+                                addToResults = saveInDatabase
+                            )
                         } else {
-                            resultViewModel.repository.getResultsFromSource(listUrl, resetResults = true)
+                            resultViewModel.repository.getResultsFromSource(
+                                listUrl,
+                                resetResults = saveInDatabase,
+                                addToResults = saveInDatabase
+                            )
                         }
                     }
-                    val ids = items.map { it.id }.filter { it != 0L }
                     progressDialog?.dismiss()
-
-                    if (ids.isEmpty()) {
-                        showListProblem(getString(R.string.explore_list_empty))
-                    } else {
-                        // el lugar elegido en la cola vale para todos: se colocan seguidos, en el mismo orden
-                        QueuePlacement.request(items.filter { it.id != 0L }.map { it.url }, position)
-                        val showCard = prefs.getBoolean("download_card", true)
-                        val kind = DownloadKind.load(prefs)
-                        downloadViewModel.turnResultItemsToProcessingDownloads(
-                            ids,
-                            downloadNow = !showCard,
-                            forcedType = kind.type,
-                            forcedAudioContainer = kind.container
-                        )
-                        if (showCard) {
-                            val nav = findNavController()
-                            if (nav.currentDestination?.id == R.id.exploreFragment) {
-                                nav.navigate(R.id.downloadMultipleBottomSheetDialog2)
-                            }
-                        } else {
-                            toast(R.string.downloading)
-                        }
-                    }
+                    onItems(items)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -1149,6 +1199,162 @@ class ExploreFragment : Fragment() {
                 }
             }
         }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Escuchar solo el audio (en segundo plano)
+    // ------------------------------------------------------------------------------------------
+
+    /** Lo que se sabe de la página en el momento de pasar al audio: título, canal y segundo en el que iba el vídeo. */
+    private class PageSnapshot(val title: String, val author: String, val positionMs: Long)
+
+    /**
+     * Botón "Escuchar": solo el audio del vídeo, la playlist o el Mix que se está viendo. El vídeo de la página se
+     * pausa y el audio sigue desde el mismo segundo, en un reproductor propio que no se corta al apagar la pantalla.
+     */
+    private fun onListenClick() {
+        val page = currentPage
+        val videoId = page.videoId
+        when {
+            page.kind == YoutubeUrls.Kind.VIDEO && videoId != null -> listenVideo(videoId)
+            page.kind == YoutubeUrls.Kind.PLAYLIST -> listenList(page, null)
+            page.kind == YoutubeUrls.Kind.VIDEO_IN_LIST && videoId != null -> askListenVideoOrList(page, videoId)
+            else -> toast(R.string.explore_not_downloadable)
+        }
+    }
+
+    private fun askListenVideoOrList(page: YoutubeUrls.Page, videoId: String) {
+        val options = arrayOf(
+            getString(R.string.music_this_video),
+            if (page.isMix) {
+                getString(R.string.music_whole_mix, YoutubeUrls.MIX_LIMIT)
+            } else {
+                getString(R.string.music_whole_list)
+            }
+        )
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.music_listen_title)
+            .setItems(options) { _, which ->
+                if (which == 0) listenVideo(videoId) else listenList(page, videoId)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** Si ya suena algo, pregunta si lo nuevo va ahora, a continuación o al final de la cola; si no, empieza directamente. */
+    private fun chooseListenMode(onChosen: (ExplorePlayer.Mode) -> Unit) {
+        if (!player.hasQueue()) {
+            onChosen(ExplorePlayer.Mode.NOW)
+            return
+        }
+        val modes = ExplorePlayer.Mode.values()
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.music_listen_title)
+            .setItems(
+                arrayOf(
+                    getString(R.string.music_mode_now),
+                    getString(R.string.music_mode_next),
+                    getString(R.string.music_mode_end)
+                )
+            ) { _, which -> onChosen(modes[which]) }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** El vídeo que se está viendo, solo en audio. */
+    private fun listenVideo(videoId: String) {
+        chooseListenMode { mode ->
+            withFreshCookies {
+                pausePage { snapshot ->
+                    val item = ExplorePlayer.mediaItem(videoId, cleanPageTitle(snapshot.title), snapshot.author)
+                    startMusic(listOf(item), 0, snapshot.positionMs, mode)
+                }
+            }
+        }
+    }
+
+    /** Una playlist o un Mix completos, solo en audio; si se pidió desde un vídeo de la lista, empieza por ese. */
+    private fun listenList(page: YoutubeUrls.Page, fromVideoId: String?) {
+        val listUrl = YoutubeUrls.listUrl(page) ?: return
+        if (fetchJob?.isActive == true) return
+        chooseListenMode { mode ->
+            readList(page, listUrl, saveInDatabase = false) { results ->
+                val items = results.mapNotNull { ExplorePlayer.mediaItem(it) }
+                if (items.isEmpty()) {
+                    showListProblem(getString(R.string.explore_list_empty))
+                    return@readList
+                }
+                val startUrl = fromVideoId?.let { YoutubeUrls.videoUrl(it) }
+                val start = items.indexOfFirst { it.mediaId == startUrl }.coerceAtLeast(0)
+                pausePage { snapshot ->
+                    // el segundo en el que iba el vídeo solo sirve si se empieza por ese mismo vídeo
+                    val position = if (startUrl != null && items[start].mediaId == startUrl) snapshot.positionMs else 0L
+                    startMusic(items, start, position, mode)
+                }
+            }
+        }
+    }
+
+    /** Pulsación larga sobre un enlace a un vídeo: escucharlo sin abrirlo (se busca su título para la notificación). */
+    private fun listenLink(videoId: String) {
+        chooseListenMode { mode ->
+            withFreshCookies {
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val info = withContext(Dispatchers.IO) {
+                        runCatching {
+                            resultViewModel.repository.getResultsFromSource(
+                                YoutubeUrls.videoUrl(videoId),
+                                resetResults = false,
+                                addToResults = false,
+                                singleItem = true
+                            ).firstOrNull()
+                        }.getOrNull()
+                    }
+                    val item = info?.let { ExplorePlayer.mediaItem(it) }
+                        ?: ExplorePlayer.mediaItem(videoId, null, null)
+                    pausePage { startMusic(listOf(item), 0, 0L, mode) }
+                }
+            }
+        }
+    }
+
+    /** Pausa el vídeo de la página (para que no suene a la vez que el audio) y devuelve lo que se sabe de él. */
+    private fun pausePage(onDone: (PageSnapshot) -> Unit) {
+        val wv = webView
+        if (wv == null) {
+            onDone(PageSnapshot("", "", 0L))
+            return
+        }
+        wv.evaluateJavascript(PAUSE_PAGE_SCRIPT) { raw ->
+            var snapshot = PageSnapshot("", "", 0L)
+            runCatching {
+                val json = JSONObject(raw)
+                val seconds = json.optDouble("p", -1.0)
+                snapshot = PageSnapshot(
+                    title = json.optString("t"),
+                    author = json.optString("a"),
+                    positionMs = if (seconds > 0) (seconds * 1000).toLong() else 0L
+                )
+            }
+            if (isAdded && view != null) onDone(snapshot)
+        }
+    }
+
+    /** El título de la pestaña es "Título - YouTube", y con avisos pendientes "(3) Título - YouTube". */
+    private fun cleanPageTitle(raw: String): String {
+        return raw.replace(Regex("^\\(\\d+\\)\\s*"), "").removeSuffix(" - YouTube").trim()
+    }
+
+    private fun startMusic(items: List<MediaItem>, startIndex: Int, positionMs: Long, mode: ExplorePlayer.Mode) {
+        if (!isAdded || view == null) return
+        player.play(items, startIndex, positionMs, mode)
+        toast(
+            when (mode) {
+                ExplorePlayer.Mode.NEXT -> R.string.music_added_next
+                ExplorePlayer.Mode.END -> R.string.music_added_end
+                ExplorePlayer.Mode.NOW -> R.string.music_starting
+            }
+        )
     }
 
     private fun showProgressDialog(onCancel: () -> Unit): TextView {
@@ -1199,6 +1405,10 @@ class ExploreFragment : Fragment() {
         context?.let { Toast.makeText(it, resId, Toast.LENGTH_SHORT).show() }
     }
 
+    private fun toastText(text: String) {
+        context?.let { Toast.makeText(it, text, Toast.LENGTH_LONG).show() }
+    }
+
     // ------------------------------------------------------------------------------------------
     // Ciclo de vida
     // ------------------------------------------------------------------------------------------
@@ -1246,5 +1456,25 @@ class ExploreFragment : Fragment() {
         private const val PREF_USE_ACCOUNT = "explore_use_account"
         private const val PREF_ACCOUNT_PROMPTED = "explore_account_prompted"
         private const val COOKIE_DESCRIPTION = "Explorar (cuenta de Google)"
+
+        /** Pausa los vídeos de la página y devuelve { t: título de la pestaña, a: canal, p: segundo en el que iba }. */
+        private const val PAUSE_PAGE_SCRIPT = """
+            (function () {
+                var videos = document.getElementsByTagName('video');
+                var main = document.querySelector('video.html5-main-video') || videos[0] || null;
+                var position = main ? main.currentTime : -1;
+                for (var i = 0; i < videos.length; i++) { try { videos[i].pause(); } catch (e) {} }
+                var author = '';
+                try {
+                    var node = document.querySelector('[itemprop="author"] [itemprop="name"]');
+                    if (node) author = node.getAttribute('content') || node.textContent || '';
+                } catch (e) {}
+                return {
+                    t: document.title || '',
+                    a: author,
+                    p: (typeof position === 'number' && isFinite(position)) ? position : -1
+                };
+            })()
+        """
     }
 }

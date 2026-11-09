@@ -258,6 +258,8 @@ dependencies {
     // For HLS playback support with ExoPlayer
     implementation("androidx.media3:media3-exoplayer-hls:1.9.0")
     implementation("androidx.media3:media3-ui:1.9.0")
+    // Reproductor de audio en segundo plano (servicio con notificación y controles)
+    implementation("androidx.media3:media3-session:1.9.0")
     // For RTSP playback support with ExoPlayer
     implementation("androidx.media3:media3-exoplayer-rtsp:1.9.0")
 
