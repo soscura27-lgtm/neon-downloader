@@ -67,12 +67,22 @@ EOF
 
 # Se borra la Release anterior de esta rama (y su etiqueta) y se crea de nuevo apuntando a este commit.
 gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1 || true
-gh release create "$tag" "$asset" \
-  --repo "$GITHUB_REPOSITORY" \
-  --target "$GITHUB_SHA" \
-  --title "$title" \
-  --notes "$notes" \
-  "${flags[@]}"
+create_release() {
+  gh release create "$tag" "$asset" \
+    --repo "$GITHUB_REPOSITORY" \
+    --target "$1" \
+    --title "$title" \
+    --notes "$notes" \
+    "${flags[@]}"
+}
+# GitHub no deja al token de la ejecución crear una etiqueta en un commit cuyo flujo de trabajo ya no
+# coincide con el de ninguna rama (pasa si se subió un cambio del flujo mientras esto compilaba).
+# En ese caso la etiqueta se crea en la punta de la rama; las notas siguen indicando el commit compilado.
+if ! create_release "$GITHUB_SHA"; then
+  echo "AVISO: no se pudo etiquetar $short_sha; se publica en la punta de la rama $branch."
+  gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1 || true
+  create_release "$branch"
+fi
 
 echo "APK publicado: $download_url"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
