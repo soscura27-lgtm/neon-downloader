@@ -31,26 +31,26 @@ cian y naranja neón, tipografía Orbitron y fondo espacial). Está basada en
 El resumen técnico de lo que cambió está en [CHANGES.md](CHANGES.md); los créditos y licencias en
 [NOTICE.md](NOTICE.md).
 
-## Compilar (Bitrise)
+## Compilar (GitHub Actions)
 
-La compilación corre en Bitrise con el archivo [`bitrise.yml`](bitrise.yml):
+La app se compila **solo en GitHub**, con el flujo [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml):
 
-| Workflow      | Qué hace                                                                 |
-|---------------|--------------------------------------------------------------------------|
-| `build-apk`   | APK firmado (`githubRelease`, arm64‑v8a) + página pública de instalación |
-| `check-debug` | Compila `githubDebug` para comprobar que todo funciona                   |
-
-El APK sale en la pestaña **Artifacts** del build; abre su "página de instalación" desde el celular
-para instalarlo.
+- Cada push compila el APK firmado (`githubRelease`, arm64‑v8a).
+- El APK se publica en la pestaña **Releases** del repositorio:
+  - `main` → la versión marcada como *Latest*. Enlace fijo para el celular:
+    <https://github.com/soscura27-lgtm/neon-downloader/releases/latest/download/NeonDownloader.apk>
+  - cualquier otra rama → una *pre-release* de prueba `apk-<rama>`.
+- También queda en **Actions → la ejecución → Artifacts** durante 30 días.
+- Para recompilar sin cambios: **Actions → Compilar APK → Run workflow**.
 
 ### Firma
 
 Este repositorio es público, así que **no contiene ninguna clave de firma**. La clave personal vive
-solo en la configuración de la app en Bitrise (variables `NEON_KEYSTORE_B64`,
-`NEON_KEYSTORE_PASSWORD`, `NEON_KEY_ALIAS` y `NEON_KEY_PASSWORD`) y
-`scripts/ci/prepare_signing.sh` la usa al compilar. Así cada versión se firma igual y se instala
-encima de la anterior. Sin esas variables la compilación sigue funcionando, pero firma con una clave
-de depuración distinta cada vez (hay que desinstalar antes de actualizar).
+solo en los secretos del repositorio (**Settings → Secrets and variables → Actions**):
+`NEON_KEYSTORE_B64`, `NEON_KEYSTORE_PASSWORD`, `NEON_KEY_ALIAS`, `NEON_KEY_PASSWORD` y, opcional,
+`NEON_KEYSTORE_SHA256`. `scripts/ci/prepare_signing.sh` la usa al compilar, así cada versión se firma
+igual y se instala encima de la anterior. Sin esos secretos la compilación sigue funcionando, pero firma
+con una clave de prueba distinta cada vez (hay que desinstalar antes de actualizar).
 
 ## Compilar en tu computadora
 

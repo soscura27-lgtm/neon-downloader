@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Prepara la firma estable del APK SIN guardar ninguna clave en el repositorio.
 #
-# En CI lee estas variables de entorno (definidas en la configuración de Bitrise):
+# En CI lee estas variables de entorno (secretos del repositorio en GitHub: Settings → Secrets and
+# variables → Actions; .github/workflows/build-apk.yml se los pasa a la compilación):
 #   NEON_KEYSTORE_B64       keystore PKCS12 codificado en base64
 #   NEON_KEYSTORE_SHA256    (opcional) huella SHA-256 del .p12 para detectar copias dañadas
 #   NEON_KEYSTORE_PASSWORD  contraseña del keystore

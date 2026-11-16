@@ -1,0 +1,88 @@
+# Compilación de Neon Downloader. GitHub Actions es el ÚNICO sitio donde se compila la app.
+#
+# - Cada push (a cualquier rama) compila el APK firmado (githubRelease, arm64-v8a).
+# - El APK queda en los "Artifacts" de la ejecución y en una Release de la rama, que se reemplaza
+#   en cada compilación:
+#     main  -> etiqueta apk-main, marcada como "Latest"
+#              (enlace fijo: /releases/latest/download/NeonDownloader.apk)
+#     otras -> etiqueta apk-<rama>, como pre-release de prueba
+# - Firma estable con los secretos del repositorio (Settings → Secrets and variables → Actions):
+#     NEON_KEYSTORE_B64, NEON_KEYSTORE_PASSWORD, NEON_KEY_ALIAS, NEON_KEY_PASSWORD y, opcional,
+#     NEON_KEYSTORE_SHA256. Sin ellos también compila, pero con una firma de prueba distinta cada vez.
+# - Para recompilar a mano: pestaña Actions → "Compilar APK" → Run workflow.
+name: Compilar APK
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'fastlane/**'
+      - 'licenses/**'
+      - 'LICENSE'
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: Variante a compilar
+        type: choice
+        default: githubRelease
+        options:
+          - githubRelease
+          - githubDebug
+
+# Un push nuevo a la misma rama cancela la compilación anterior que siga en marcha.
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+# Escribir hace falta para publicar el APK en Releases.
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      VARIANT: ${{ inputs.variant || 'githubRelease' }}
+      APK_OUT_DIR: ${{ github.workspace }}/out
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle (con caché de dependencias)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Nombre seguro de la rama
+        run: echo "SAFE_REF=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+
+      - name: Compilar
+        env:
+          NEON_KEYSTORE_B64: ${{ secrets.NEON_KEYSTORE_B64 }}
+          NEON_KEYSTORE_SHA256: ${{ secrets.NEON_KEYSTORE_SHA256 }}
+          NEON_KEYSTORE_PASSWORD: ${{ secrets.NEON_KEYSTORE_PASSWORD }}
+          NEON_KEY_ALIAS: ${{ secrets.NEON_KEY_ALIAS }}
+          NEON_KEY_PASSWORD: ${{ secrets.NEON_KEY_PASSWORD }}
+        run: bash scripts/ci/build_apk.sh "$VARIANT"
+
+      - name: Guardar el APK en la ejecución
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeonDownloader-${{ env.SAFE_REF }}-${{ github.run_number }}
+          path: out/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ secrets.NEON_KEYSTORE_B64 != '' }}
+        run: bash scripts/ci/publish_release.sh

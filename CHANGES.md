@@ -53,5 +53,7 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
 ## Proyecto
 - `applicationId` → `com.diego.neondownloader` (accesos directos actualizados).
 - Solo se compila `arm64-v8a`; archivos de salida `NeonDownloader-*.apk`.
-- Firma estable por variables de entorno (sin claves en el repositorio), `bitrise.yml` y scripts de CI. Se eliminó `.github/` y los README
-  traducidos del original (el README original queda en `UPSTREAM-README.md`).
+- Compilación solo en GitHub Actions (`.github/workflows/build-apk.yml`, `scripts/ci/`): APK firmado en
+  cada push y publicado en Releases (`apk-main` = Latest, `apk-<rama>` = prueba). Firma estable por
+  secretos del repositorio, sin claves en el código. Se reemplazaron los flujos de GitHub del original y
+  se quitaron los README traducidos (el README original queda en `UPSTREAM-README.md`).

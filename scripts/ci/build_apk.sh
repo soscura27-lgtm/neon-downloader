@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Compila una variante (por defecto githubRelease), localiza los APK generados y los copia a
-# $BITRISE_DEPLOY_DIR (o ./out fuera de Bitrise). Uso: scripts/ci/build_apk.sh [variante]
+# $APK_OUT_DIR (por defecto ./out). Lo usa .github/workflows/build-apk.yml (GitHub Actions es el
+# único sitio donde se compila la app) y también sirve en una computadora.
+# Uso: scripts/ci/build_apk.sh [variante]
 set -euo pipefail
 
 VARIANT="${1:-githubRelease}"
@@ -10,10 +12,12 @@ cd "$ROOT"
 bash scripts/ci/prepare_signing.sh
 
 # githubRelease -> assembleGithubRelease
+chmod +x ./gradlew 2>/dev/null || true
 ./gradlew ":app:assemble${VARIANT^}" --stacktrace
 
-OUT="${BITRISE_DEPLOY_DIR:-$ROOT/out}"
+OUT="${APK_OUT_DIR:-$ROOT/out}"
 mkdir -p "$OUT"
+rm -f "$OUT"/*.apk
 
 mapfile -t apks < <(find "$ROOT/app/build/outputs/apk" -name '*.apk' -type f 2>/dev/null | sort)
 if ((${#apks[@]} == 0)); then
