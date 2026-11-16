@@ -58,16 +58,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Gradle (con caché de dependencias)
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          # también las ramas de trabajo guardan la caché: así las compilaciones de prueba tardan menos
-          cache-read-only: false
-
-      - name: Nombre seguro de la rama
-        run: echo "SAFE_REF=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
-
-      - name: Compilar
+      # La firma se prepara antes que Gradle: si el secreto está mal, falla aquí y la caché de
+      # dependencias no se toca. Los secretos solo llegan a este paso.
+      - name: Preparar la firma
         env:
           NEON_FIRMA: ${{ secrets.NEON_FIRMA }}
           NEON_KEYSTORE_B64: ${{ secrets.NEON_KEYSTORE_B64 }}
@@ -75,6 +68,20 @@ jobs:
           NEON_KEYSTORE_PASSWORD: ${{ secrets.NEON_KEYSTORE_PASSWORD }}
           NEON_KEY_ALIAS: ${{ secrets.NEON_KEY_ALIAS }}
           NEON_KEY_PASSWORD: ${{ secrets.NEON_KEY_PASSWORD }}
+        run: bash scripts/ci/prepare_signing.sh
+
+      - name: Gradle (con caché de dependencias)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # también las ramas de trabajo guardan la caché: así las compilaciones de prueba tardan menos
+          cache-read-only: false
+          # la caché solo se limpia cuando la compilación sale bien
+          cache-cleanup: on-success
+
+      - name: Nombre seguro de la rama
+        run: echo "SAFE_REF=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+
+      - name: Compilar
         run: bash scripts/ci/build_apk.sh "$VARIANT"
 
       - name: Guardar el APK en la ejecución
