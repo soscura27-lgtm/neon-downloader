@@ -67,6 +67,9 @@ object LyricsFinder {
     /** Tolerancia para dar por buenos los tiempos de una letra de LRCLIB (como su propia búsqueda). */
     private const val SYNC_TOLERANCE_SEC = 3
 
+    /** Cuántas combinaciones de nombre y artista se prueban en LRCLIB. */
+    private const val MAX_NAME_TRIES = 3
+
     private val found = LruCache<String, Lyrics>(40)
     private val missing = LruCache<String, Long>(40)
 
@@ -154,11 +157,12 @@ object LyricsFinder {
         }
         if (youtubeLyrics?.synced == true) return youtubeLyrics
 
-        // 3. LRCLIB con los nombres reales (sincronizada si la duración coincide)
+        // 3. LRCLIB con los nombres reales (sincronizada si la duración coincide); solo si es esa canción de verdad
         val names = TitleParser.candidates(track, info)
         var lrclibPlain: LrcLibUtil.Lyrics? = null
-        for ((title, artist) in names.take(2)) {
+        for ((title, artist) in names.take(MAX_NAME_TRIES)) {
             val result = attempt.ask { LrcLibUtil.find(title, artist, "", duration) } ?: continue
+            if (!TitleParser.matches(result.trackName, result.artistName, title, artist)) continue
             if (result.isSynced && timingFits(result.durationSec, duration)) return fromLrclib(result, synced = true)
             if (lrclibPlain == null) lrclibPlain = result
         }
@@ -168,7 +172,7 @@ object LyricsFinder {
         lrclibPlain?.let { return fromLrclib(it, synced = false) }
 
         // 5. búsqueda libre en LRCLIB, solo si el título y el artista coinciden
-        for ((title, artist) in names.take(2)) {
+        for ((title, artist) in names.take(MAX_NAME_TRIES)) {
             val results = attempt.ask { LrcLibUtil.search("$artist $title".trim()) } ?: continue
             val best = TitleParser.bestMatch(results, title, artist, duration) ?: continue
             return fromLrclib(best, synced = best.isSynced && timingFits(best.durationSec, duration))
@@ -297,36 +301,62 @@ internal object TitleParser {
         }
         if (info != null && info.title.isNotBlank()) {
             val main = info.artists.firstOrNull().orEmpty()
+            // tal cual ("Bohemian Rhapsody (Digital Remaster)") y sin lo que va entre paréntesis
+            add(info.title, main)
             add(cleanTitle(info.title), main)
-            if (info.artists.size > 1) add(cleanTitle(info.title), info.artists.joinToString(", "))
         }
         val (title, artist) = parse(track.title, track.artist)
         add(title, artist)
         val withoutFeat = featuring.replace(title, "").trim()
         if (withoutFeat != title) add(withoutFeat, artist)
+        if (info != null && info.artists.size > 1) add(cleanTitle(info.title), info.artists.joinToString(", "))
         return out.values.toList()
     }
 
-    /** De una búsqueda libre, el resultado cuyo título y artista coinciden de verdad (null si ninguno). */
+    /** De una búsqueda libre, el resultado que es de verdad esa canción (null si ninguno). */
     fun bestMatch(results: List<LrcLibUtil.Lyrics>, title: String, artist: String, durationSec: Int): LrcLibUtil.Lyrics? {
-        val wantedTitle = normalize(featuring.replace(title, ""))
-        val wantedArtist = normalize(artist)
+        val wantedTitle = comparableTitle(title)
         return results
-            .filter { r ->
-                val t = normalize(featuring.replace(r.trackName, ""))
-                val a = normalize(r.artistName)
-                val titleOk = t.isNotBlank() && wantedTitle.isNotBlank() && (t == wantedTitle || t.contains(wantedTitle) || wantedTitle.contains(t))
-                val artistOk = wantedArtist.isBlank() || a.contains(wantedArtist) || wantedArtist.contains(a)
-                titleOk && artistOk
-            }
+            .filter { matches(it.trackName, it.artistName, title, artist) }
             .minWithOrNull(
                 compareBy<LrcLibUtil.Lyrics>(
-                    { normalize(it.trackName) != wantedTitle },
+                    { comparableTitle(it.trackName) != wantedTitle },
                     { if (durationSec > 0 && it.durationSec > 0) abs(it.durationSec - durationSec) else 0 },
                     { !it.isSynced }
                 )
             )
     }
+
+    /**
+     * ¿La letra encontrada ([trackName] de [artistName]) es de la canción buscada? El nombre tiene que coincidir (o
+     * contener al otro) y algún artista tiene que estar en los dos; sin artista, el nombre tiene que ser el mismo.
+     * Así un vídeo que no es una canción no se queda con la letra de otra que se llame parecido.
+     */
+    fun matches(trackName: String, artistName: String, title: String, artist: String): Boolean {
+        val wanted = comparableTitle(title)
+        val found = comparableTitle(trackName)
+        if (wanted.isBlank() || found.isBlank()) return false
+        val wantedArtists = artistParts(artist)
+        if (wantedArtists.isEmpty()) return found == wanted
+        val titleOk = found == wanted || found.contains(wanted) || wanted.contains(found)
+        val foundArtist = normalize(artistName)
+        val foundArtists = artistParts(artistName)
+        val artistOk = wantedArtists.any { foundArtist.contains(it) } ||
+                foundArtists.any { part -> wantedArtists.any { it.contains(part) } }
+        return titleOk && artistOk
+    }
+
+    private val artistSplit = Regex(
+        """\s*(?:,|&|/|\+|\bx\b|\by\b|\band\b|\bwith\b|\bcon\b|\bfeat\.?|\bft\.?|\bfeaturing\b)\s*""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** "Peso Pluma, Natanael Cano" / "Wisin y Yandel" -> nombres sueltos, ya normalizados. */
+    private fun artistParts(raw: String): List<String> =
+        raw.split(artistSplit).map { normalize(it) }.filter { it.length >= 2 }
+
+    /** El nombre de la canción sin paréntesis de "video oficial", "remaster", ni "feat. ...". */
+    private fun comparableTitle(raw: String): String = normalize(featuring.replace(cleanTitle(raw), ""))
 
     fun cleanTitle(raw: String): String {
         var title = raw.trim()

@@ -26,6 +26,7 @@ VIDEOS = ["kJQP7kiw5Fk", "dQw4w9WgXcQ", "fJ9rUzIMcZQ", "JGwWNGJdvx8"]
 
 visitor_data = None
 problemas = []
+songs_in_queue = []
 
 
 def web_version():
@@ -137,6 +138,15 @@ def info(video_id):
         print(f"    pestaña {i}: pageType={page or '-'} browseId={bid[:24] or '-'} unselectable={tr.get('unselectable')}")
         if bid and (page == "MUSIC_PAGE_TYPE_TRACK_LYRICS" or (not page and i == 1)):
             lyrics_id = bid
+    for item in (queue or [])[:4]:
+        keys = list(item.keys())
+        video = item.get("playlistPanelVideoRenderer") or obj(item, "playlistPanelVideoWrapperRenderer",
+                                                              "primaryRenderer", "playlistPanelVideoRenderer") or {}
+        kind = obj(video, "navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs",
+                   "watchEndpointMusicConfig", "musicVideoType")
+        print(f"    cola: {keys} {video.get('videoId')} {kind} {runs_text(video, 'title')[:40]!r}")
+        if kind == "MUSIC_VIDEO_TYPE_ATV" and video.get("videoId") != video_id:
+            songs_in_queue.append(video.get("videoId"))
     current = None
     for item in queue or []:
         wrapper = item.get("playlistPanelVideoWrapperRenderer")
@@ -161,8 +171,12 @@ def timed(data):
             "timedLyricsModel", "lyricsData")
     if not d or not d.get("timedLyricsData"):
         return None
+    items = d["timedLyricsData"]
+    print(f"    letra (Android): lyricsData={sorted(d.keys())} timedLyricsData={len(items)} elementos")
+    for item in items[:2]:
+        print("      ejemplo:", json.dumps(item, ensure_ascii=False)[:400])
     lines = []
-    for item in d["timedLyricsData"]:
+    for item in items:
         start = obj(item, "cueRange", "startTimeMilliseconds")
         if start is None:
             continue
@@ -184,12 +198,16 @@ def plain(data):
 def lyrics(browse_id):
     a = post("browse", {"context": context("ANDROID_MUSIC", ANDROID_VERSION), "browseId": browse_id})
     t = timed(a) if a else None
+    result = (None, 0)
     if t:
         lines, src = t
-        print(f"    letra (Android): CON TIEMPOS, {len(lines)} líneas, fuente={src!r}")
+        print(f"    letra (Android): CON TIEMPOS, {len(lines)} líneas leídas, fuente={src!r}")
         for ms, text in lines[:3]:
             print(f"      [{ms / 1000:7.2f}] {text}")
-        return "timed", lines[-1][0] if lines else 0
+        if lines:
+            result = ("timed", lines[-1][0])
+        else:
+            problemas.append(f"{browse_id}: la letra con tiempos llegó pero no se pudo leer ninguna línea")
     p = plain(a) if a else None
     if p:
         print(f"    letra (Android): solo texto, {len(p[0].splitlines())} líneas, fuente={p[1]!r}")
@@ -201,9 +219,11 @@ def lyrics(browse_id):
     if p2:
         first = [l for l in p2[0].splitlines() if l.strip()][:2]
         print(f"    letra (web): solo texto, {len(p2[0].splitlines())} líneas, fuente={p2[1]!r} -> {first}")
-        return "plain", 0
+        return result if result[0] else ("plain", 0)
     print("    letra (web): nada")
-    return None, 0
+    if not result[0]:
+        problemas.append(f"{browse_id}: hay pestaña de letra pero no llegó ninguna letra")
+    return result
 
 
 def lrclib(path, params):
@@ -258,6 +278,13 @@ def main():
         try:
             probe(v)
         except Exception as e:  # noqa: BLE001 - es un diagnóstico: se cuenta y se sigue
+            print(f"    ERROR: {type(e).__name__}: {e}")
+            problemas.append(f"{v}: {type(e).__name__}: {e}")
+    # también una canción (no un videoclip): sus tiempos son los de la letra
+    for v in songs_in_queue[:2]:
+        try:
+            probe(v, follow_counterpart=False)
+        except Exception as e:  # noqa: BLE001
             print(f"    ERROR: {type(e).__name__}: {e}")
             problemas.append(f"{v}: {type(e).__name__}: {e}")
     print("\nvisitorData recibido:", bool(visitor_data))
