@@ -147,15 +147,13 @@ object LyricsFinder {
         val hl = locale.language.ifBlank { "es" }
         val gl = locale.country.ifBlank { "US" }
 
-        // 2. YouTube Music por el vídeo
+        // 2. YouTube Music por el vídeo (con tiempos solo si el vídeo es la canción misma)
         val info = track.videoId?.let { id -> attempt.ask { YoutubeMusicLyrics.info(id, hl, gl) } }
         val duration = info?.durationSec?.takeIf { it > 0 } ?: track.durationSec
-        val youtubeLyrics = info?.let { known ->
-            known.lyricsBrowseId
-                ?.let { id -> attempt.ask { YoutubeMusicLyrics.lyrics(id, hl, gl) } }
-                ?.let { lyrics -> fromYoutube(lyrics, known, track, synced = lyrics.timed && known.timingMatchesSong) }
+        val youtube = info?.lyricsBrowseId?.let { id -> attempt.ask { YoutubeMusicLyrics.lyrics(id, hl, gl) } }
+        if (info != null && youtube != null && youtube.timed && info.timingMatchesSong) {
+            return fromYoutube(youtube, info, track, synced = true)
         }
-        if (youtubeLyrics?.synced == true) return youtubeLyrics
 
         // 3. LRCLIB con los nombres reales (sincronizada si la duración coincide); solo si es esa canción de verdad
         val names = TitleParser.candidates(track, info)
@@ -167,8 +165,13 @@ object LyricsFinder {
             if (lrclibPlain == null) lrclibPlain = result
         }
 
-        // 4. sin tiempos que valgan: la de YouTube Music (exacta para el vídeo) o la de LRCLIB como texto
-        youtubeLyrics?.let { return it }
+        // 4. la de YouTube Music (exacta para el vídeo). Sus tiempos son los de la canción: en un videoclip valen si la
+        //    canción (según LRCLIB) dura lo mismo que el vídeo; si no, se enseña como texto. Si no, la de LRCLIB.
+        if (info != null && youtube != null) {
+            val songFits = youtube.timed && lrclibPlain != null && lrclibPlain.durationSec > 0 &&
+                    timingFits(lrclibPlain.durationSec, duration)
+            return fromYoutube(youtube, info, track, synced = songFits)
+        }
         lrclibPlain?.let { return fromLrclib(it, synced = false) }
 
         // 5. búsqueda libre en LRCLIB, solo si el título y el artista coinciden

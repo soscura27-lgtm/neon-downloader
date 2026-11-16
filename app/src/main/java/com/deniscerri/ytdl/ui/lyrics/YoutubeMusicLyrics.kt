@@ -190,8 +190,8 @@ internal object YoutubeMusicLyrics {
     // ------------------------------------------------------------------------------------------
 
     /**
-     * La letra de la pestaña "Letra". Primero con el cliente de Android (que la da con tiempos) y, si no, con el
-     * de la web (solo el texto). null si no hay letra.
+     * La letra de la pestaña "Letra": con el cliente de Android llega con tiempos y con el de la web, como texto con
+     * las estrofas separadas (que es lo que se copia). null si no hay letra.
      */
     fun lyrics(browseId: String, hl: String, gl: String): Found? {
         val android = runCatching {
@@ -202,18 +202,31 @@ internal object YoutubeMusicLyrics {
                     .put("browseId", browseId)
             )
         }.getOrNull()
-        android?.let { parseTimed(it) ?: parsePlain(it) }?.let { return it }
+        val timed = android?.let { parseTimed(it) }
+        if (timed == null) android?.let { parsePlain(it) }?.let { return it }
 
-        val web = post(
-            "browse",
-            JSONObject()
-                .put("context", context(WEB_CLIENT, webVersion(), hl, gl))
-                .put("browseId", browseId)
-        ) ?: return null
-        return parsePlain(web)
+        val request = JSONObject()
+            .put("context", context(WEB_CLIENT, webVersion(), hl, gl))
+            .put("browseId", browseId)
+        // con la letra con tiempos ya en la mano, el texto de la web es un extra: si falla, no pasa nada
+        val web = if (timed != null) runCatching { post("browse", request) }.getOrNull() else post("browse", request)
+        val plain = web?.let { parsePlain(it) }
+        if (timed == null) return plain
+        if (plain == null) return timed
+        return Found(
+            lines = timed.lines,
+            text = plain.text,
+            timed = true,
+            sourceNote = timed.sourceNote.ifBlank { plain.sourceNote }
+        )
     }
 
-    /** contents.elementRenderer...timedLyricsModel.lyricsData.timedLyricsData[{lyricLine, cueRange}] */
+    /**
+     * contents.elementRenderer...timedLyricsModel.lyricsData.timedLyricsData:
+     * [{"lyricLine": "...", "cueRange": {"startTimeMilliseconds": "6800", ...}}]. YouTube prueba variantes de este
+     * formato (se vio una con otros nombres), así que el inicio de cada línea se busca también con nombres parecidos;
+     * si no se reconoce ninguna línea, la letra se pide como texto.
+     */
     private fun parseTimed(json: JSONObject): Found? {
         val data = json.obj(
             "contents", "elementRenderer", "newElement", "type", "componentType", "model",
@@ -222,19 +235,57 @@ internal object YoutubeMusicLyrics {
         val timed = data.optJSONArray("timedLyricsData") ?: return null
         val lines = ArrayList<LyricsFinder.Line>()
         for (i in 0 until timed.length()) {
-            val item = timed.optJSONObject(i) ?: continue
-            val start = item.optJSONObject("cueRange")?.opt("startTimeMilliseconds")?.toString()?.toLongOrNull()
-                ?: continue
-            lines.add(LyricsFinder.Line(start, item.optString("lyricLine").trim()))
+            val item = unwrap(timed.optJSONObject(i) ?: continue)
+            val start = startOf(item) ?: continue
+            lines.add(LyricsFinder.Line(start, textOf(item)))
         }
         if (lines.none { it.text.isNotBlank() }) return null
         lines.sortBy { it.timeMs }
+        // la letra para copiar: sin las notas (♪) de las partes sin voz
+        val text = lines.map { it.text }.filter { it.isNotBlank() && it != "♪" }.joinToString("\n").trim()
         return Found(
             lines = lines,
-            text = lines.joinToString("\n") { it.text }.trim(),
+            text = text,
             timed = true,
             sourceNote = data.optString("sourceMessage").trim()
         )
+    }
+
+    /** {"timedLyricsLine": {"lyricLine": ..., "cueRange": ...}} -> lo de dentro. */
+    private fun unwrap(item: JSONObject): JSONObject {
+        if (item.has("cueRange") || item.has("lyricLine") || item.length() != 1) return item
+        return item.optJSONObject(item.keys().next()) ?: item
+    }
+
+    /** Milisegundo en el que empieza la línea. */
+    private fun startOf(item: JSONObject): Long? {
+        val places = listOfNotNull(item.optJSONObject("cueRange"), item.optJSONObject("timeRange"), item)
+        for (place in places) {
+            for (key in START_KEYS) {
+                place.opt(key)?.toString()?.toDoubleOrNull()?.let { return it.toLong() }
+            }
+            val names = place.keys().asSequence().toList()
+            // otros nombres: "start...ms" / "start...millis" en milisegundos, "start...sec" en segundos
+            names.firstOrNull { it.contains("start", true) && (it.contains("ms", true) || it.contains("milli", true)) }
+                ?.let { key -> place.opt(key)?.toString()?.toDoubleOrNull()?.let { return it.toLong() } }
+            names.firstOrNull { it.contains("start", true) && it.contains("sec", true) }
+                ?.let { key -> place.opt(key)?.toString()?.toDoubleOrNull()?.let { return (it * 1000).toLong() } }
+        }
+        return null
+    }
+
+    private fun textOf(item: JSONObject): String {
+        for (key in TEXT_KEYS) {
+            val value = item.opt(key) ?: continue
+            val text = when (value) {
+                is JSONObject -> value.optJSONArray("runs")?.let { runs ->
+                    (0 until runs.length()).joinToString("") { runs.optJSONObject(it)?.optString("text").orEmpty() }
+                } ?: value.optString("simpleText")
+                else -> value.toString()
+            }
+            return text.trim()
+        }
+        return ""
     }
 
     /** contents.sectionListRenderer.contents[].musicDescriptionShelfRenderer { description, footer } */
@@ -303,6 +354,8 @@ internal object YoutubeMusicLyrics {
     // ------------------------------------------------------------------------------------------
 
     private val SEPARATORS = setOf("&", ",", "y", "and", "x", "·")
+    private val START_KEYS = listOf("startTimeMilliseconds", "startTimeMs", "startMs", "startTimeMillis")
+    private val TEXT_KEYS = listOf("lyricLine", "text", "line", "lyric")
 
     private fun JSONObject.obj(vararg keys: String): JSONObject? {
         var current: JSONObject? = this
