@@ -6,9 +6,9 @@
 #     main  -> etiqueta apk-main, marcada como "Latest"
 #              (enlace fijo: /releases/latest/download/NeonDownloader.apk)
 #     otras -> etiqueta apk-<rama>, como pre-release de prueba
-# - Firma estable con los secretos del repositorio (Settings → Secrets and variables → Actions):
-#     NEON_KEYSTORE_B64, NEON_KEYSTORE_PASSWORD, NEON_KEY_ALIAS, NEON_KEY_PASSWORD y, opcional,
-#     NEON_KEYSTORE_SHA256. Sin ellos también compila, pero con una firma de prueba distinta cada vez.
+# - Firma estable: la clave personal viaja cifrada en scripts/ci/neon-signing.env.enc y se descifra con
+#   UN secreto del repositorio (Settings → Secrets and variables → Actions): NEON_FIRMA.
+#   Sin él también compila, pero con una firma de prueba distinta cada vez.
 # - Para recompilar a mano: pestaña Actions → "Compilar APK" → Run workflow.
 name: Compilar APK
 
@@ -60,12 +60,16 @@ jobs:
 
       - name: Gradle (con caché de dependencias)
         uses: gradle/actions/setup-gradle@v4
+        with:
+          # también las ramas de trabajo guardan la caché: así las compilaciones de prueba tardan menos
+          cache-read-only: false
 
       - name: Nombre seguro de la rama
         run: echo "SAFE_REF=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
 
       - name: Compilar
         env:
+          NEON_FIRMA: ${{ secrets.NEON_FIRMA }}
           NEON_KEYSTORE_B64: ${{ secrets.NEON_KEYSTORE_B64 }}
           NEON_KEYSTORE_SHA256: ${{ secrets.NEON_KEYSTORE_SHA256 }}
           NEON_KEYSTORE_PASSWORD: ${{ secrets.NEON_KEYSTORE_PASSWORD }}
@@ -84,5 +88,5 @@ jobs:
       - name: Publicar en Releases
         env:
           GH_TOKEN: ${{ github.token }}
-          SIGNED: ${{ secrets.NEON_KEYSTORE_B64 != '' }}
+          SIGNED: ${{ secrets.NEON_FIRMA != '' || secrets.NEON_KEYSTORE_B64 != '' }}
         run: bash scripts/ci/publish_release.sh

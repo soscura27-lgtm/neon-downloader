@@ -45,18 +45,25 @@ La app se compila **solo en GitHub**, con el flujo [`.github/workflows/build-apk
 
 ### Firma
 
-Este repositorio es público, así que **no contiene ninguna clave de firma**. La clave personal vive
-solo en los secretos del repositorio (**Settings → Secrets and variables → Actions**):
-`NEON_KEYSTORE_B64`, `NEON_KEYSTORE_PASSWORD`, `NEON_KEY_ALIAS`, `NEON_KEY_PASSWORD` y, opcional,
-`NEON_KEYSTORE_SHA256`. `scripts/ci/prepare_signing.sh` la usa al compilar, así cada versión se firma
-igual y se instala encima de la anterior. Sin esos secretos la compilación sigue funcionando, pero firma
-con una clave de prueba distinta cada vez (hay que desinstalar antes de actualizar).
+Este repositorio es público, así que la clave de firma personal **no está legible en ningún sitio del
+código**: viaja cifrada (AES‑256, PBKDF2 con 600 000 iteraciones) en
+[`scripts/ci/neon-signing.env.enc`](scripts/ci/neon-signing.env.enc) y solo se puede abrir con la
+contraseña guardada en el secreto del repositorio **`NEON_FIRMA`** (**Settings → Secrets and variables →
+Actions → New repository secret**). `scripts/ci/prepare_signing.sh` la descifra al compilar, así cada
+versión se firma igual que las anteriores y se instala encima sin perder nada.
+
+Huella SHA‑256 del certificado: `3A:FC:3F:64:02:40:07:F4:4B:2E:6E:83:18:BE:92:3F:35:23:F1:C2:92:35:1B:EA:81:32:52:DB:CF:21:FA:54`.
+
+Sin ese secreto la compilación sigue funcionando, pero firma con una clave de prueba distinta cada vez
+(hay que desinstalar antes de actualizar). También se aceptan las variables sueltas `NEON_KEYSTORE_B64`,
+`NEON_KEYSTORE_PASSWORD`, `NEON_KEY_ALIAS`, `NEON_KEY_PASSWORD` y `NEON_KEYSTORE_SHA256`.
 
 ## Compilar en tu computadora
 
 Requiere JDK 17+ y el SDK de Android (plataforma 36):
 
 ```bash
+export NEON_FIRMA='la contraseña de la clave'   # opcional: sin ella firma con una clave de prueba
 bash scripts/ci/prepare_signing.sh
 ./gradlew :app:assembleGithubRelease
 # APK: app/build/outputs/apk/github/release/

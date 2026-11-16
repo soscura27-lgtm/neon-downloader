@@ -11,9 +11,10 @@ Reglas permanentes pedidas por el dueño del proyecto. Valen para cualquier sesi
   `https://github.com/soscura27-lgtm/neon-downloader/releases/latest/download/NeonDownloader.apk`.
 - Para comprobar que un cambio compila: push a la rama de trabajo y revisar la ejecución en la
   pestaña Actions (herramientas de GitHub). Para recompilar sin cambios: "Run workflow" del mismo flujo.
-- La firma estable usa los secretos del repositorio `NEON_KEYSTORE_B64`, `NEON_KEYSTORE_PASSWORD`,
-  `NEON_KEY_ALIAS`, `NEON_KEY_PASSWORD` y, opcional, `NEON_KEYSTORE_SHA256`
-  (`scripts/ci/prepare_signing.sh`). El repositorio es público: nunca subir claves ni contraseñas.
+- Firma estable: la clave personal está cifrada en `scripts/ci/neon-signing.env.enc` y se descifra con
+  el secreto del repositorio `NEON_FIRMA` (`scripts/ci/prepare_signing.sh`). Certificado SHA-256
+  `3A:FC:3F:64:…:21:FA:54`. El repositorio es público: nunca subir claves ni contraseñas legibles, ni
+  escribir la contraseña de `NEON_FIRMA` en ningún archivo del repositorio.
 
 ## Proyecto
 - Fork personal de YTDLnis v1.9.1.1 (GPL-3.0) con tema Neon Space; paquete `com.diego.neondownloader`.

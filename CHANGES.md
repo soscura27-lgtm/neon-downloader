@@ -54,6 +54,6 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
 - `applicationId` → `com.diego.neondownloader` (accesos directos actualizados).
 - Solo se compila `arm64-v8a`; archivos de salida `NeonDownloader-*.apk`.
 - Compilación solo en GitHub Actions (`.github/workflows/build-apk.yml`, `scripts/ci/`): APK firmado en
-  cada push y publicado en Releases (`apk-main` = Latest, `apk-<rama>` = prueba). Firma estable por
-  secretos del repositorio, sin claves en el código. Se reemplazaron los flujos de GitHub del original y
+  cada push y publicado en Releases (`apk-main` = Latest, `apk-<rama>` = prueba). Firma estable con la
+  clave personal cifrada (`scripts/ci/neon-signing.env.enc`) y un único secreto (`NEON_FIRMA`). Se reemplazaron los flujos de GitHub del original y
   se quitaron los README traducidos (el README original queda en `UPSTREAM-README.md`).

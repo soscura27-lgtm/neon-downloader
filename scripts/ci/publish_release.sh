@@ -41,7 +41,7 @@ download_url="$server/$GITHUB_REPOSITORY/releases/download/$tag/NeonDownloader.a
 if [[ "${SIGNED:-false}" == "true" ]]; then
   signature="Firma estable: se instala encima de la versión anterior sin perder nada."
 else
-  signature="⚠️ **Firma de prueba**: faltan los secretos NEON_KEYSTORE_* en el repositorio. Este APK NO se instala encima de la app que ya tienes (habría que desinstalarla antes y se perderían los ajustes). Añade los secretos y vuelve a compilar."
+  signature="⚠️ **Firma de prueba**: falta el secreto NEON_FIRMA en el repositorio (Settings → Secrets and variables → Actions). Este APK NO se instala encima de la app que ya tienes (habría que desinstalarla antes y se perderían los ajustes). Añade el secreto y vuelve a compilar."
 fi
 
 if [[ "$branch" == "main" ]]; then
