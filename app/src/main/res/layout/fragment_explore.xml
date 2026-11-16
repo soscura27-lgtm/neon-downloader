@@ -218,6 +218,15 @@
                     android:textSize="14sp" />
 
                 <ImageButton
+                    android:id="@+id/explore_player_lyrics"
+                    android:layout_width="40dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/neon_lyrics_open"
+                    android:src="@drawable/ic_lyrics"
+                    android:tint="?attr/colorOnSecondaryContainer" />
+
+                <ImageButton
                     android:id="@+id/explore_player_prev"
                     android:layout_width="40dp"
                     android:layout_height="48dp"

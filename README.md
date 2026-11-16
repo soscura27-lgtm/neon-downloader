@@ -47,6 +47,13 @@ cian y naranja neón, tipografía Orbitron y fondo espacial). Está basada en
   ("Seguir sonando en segundo plano"). La notificación tiene **anterior y siguiente**: pasa al vídeo anterior o
   siguiente del Mix o la playlist (en un vídeo suelto, al recomendado; "anterior" con la canción empezada vuelve
   al principio).
+- **Letra de lo que suena**: una pantalla con **solo la letra** de la canción que suena en Explorar o en "Escuchar"
+  (botón de la letra en la barra de "Escuchar", "Ver la letra" en el botón de la esquina, el menú ⋮ de Explorar y
+  Más → "Letra de lo que suena"). **Copiar letra** la copia entera y **Seleccionar** la deja como texto para
+  elegir qué parte copiar; también se puede compartir y agrandar. Si la letra trae tiempos se marca la línea que va
+  sonando (tocar una línea lleva la canción a esa parte) y se puede ajustar si va adelantada o atrasada. Cambia
+  sola al pasar a la siguiente canción del Mix. Las letras vienen de YouTube Music (las de su app) y de LRCLIB; si
+  sale una equivocada, "Buscar otra letra" deja elegir la buena y se recuerda para esa canción.
 - **Versión y novedades** (en Más y en el menú ⋮ de Explorar): número de compilación, fecha y cambio instalados,
   la lista de cambios y "Buscar actualización" (compara con la última compilación publicada en GitHub). Al abrir
   la app después de actualizar aparece solo como **"¡Actualizada!"** con lo nuevo marcado: así sabes que se

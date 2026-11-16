@@ -61,6 +61,7 @@ import com.deniscerri.ytdl.database.viewmodel.DownloadProgressViewModel
 import com.deniscerri.ytdl.database.viewmodel.DownloadViewModel
 import com.deniscerri.ytdl.database.viewmodel.ResultViewModel
 import com.deniscerri.ytdl.ui.downloads.QueuePlacementDialog
+import com.deniscerri.ytdl.ui.lyrics.LyricsDialog
 import com.deniscerri.ytdl.ui.more.NeonUpdates
 import com.deniscerri.ytdl.util.QueuePlacement
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -205,8 +206,10 @@ class ExploreFragment : Fragment() {
             playPause = view.findViewById(R.id.explore_player_play),
             next = view.findViewById(R.id.explore_player_next),
             stop = view.findViewById(R.id.explore_player_stop),
+            lyrics = view.findViewById(R.id.explore_player_lyrics),
             // si se reanuda el audio, el vídeo de la página se calla para que no suenen los dos a la vez
             onResumeRequested = { pausePage { } },
+            onLyrics = { openLyrics(preferMusic = true) },
             onProblem = { reason -> toastText(getString(R.string.music_error, reason)) }
         )
         viewLifecycleOwner.lifecycle.addObserver(player)
@@ -638,6 +641,7 @@ class ExploreFragment : Fragment() {
                 R.id.explore_menu_copy -> copyLink(refreshUrl())
                 R.id.explore_menu_external -> openInExternalBrowser(refreshUrl())
                 R.id.explore_menu_updates -> NeonUpdates.show(requireActivity())
+                R.id.explore_menu_lyrics -> openLyrics(preferMusic = false)
                 R.id.explore_menu_background -> {
                     val enabled = !ExploreBackgroundPlayback.isEnabled(prefs)
                     prefs.edit().putBoolean(ExploreBackgroundPlayback.PREF_ENABLED, enabled).apply()
@@ -979,6 +983,13 @@ class ExploreFragment : Fragment() {
                 })
             }
             if (page.hasVideo && videoId != null) {
+                actions.add(
+                    ExploreActionsSheet.Action(
+                        R.drawable.ic_lyrics,
+                        getString(R.string.neon_lyrics_action),
+                        getString(R.string.neon_lyrics_action_sub)
+                    ) { openLyrics(preferMusic = false) }
+                )
                 actions.add(
                     ExploreActionsSheet.Action(
                         R.drawable.ic_comment,
@@ -1538,6 +1549,20 @@ class ExploreFragment : Fragment() {
     }
 
     // ------------------------------------------------------------------------------------------
+    // Letra de lo que suena
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * Solo la letra de lo que suena, para leerla o copiarla. Va en la actividad (no en esta pantalla) para que siga
+     * abierta si lo que suena pasa al reproductor de audio al cambiar de pestaña.
+     */
+    private fun openLyrics(preferMusic: Boolean) {
+        // que la página cuente ya en qué segundo va (la letra empieza marcando la línea correcta)
+        ExploreBackgroundPlayback.command("report")
+        LyricsDialog.show(requireActivity().supportFragmentManager, preferMusic)
+    }
+
+    // ------------------------------------------------------------------------------------------
     // Comentarios con GIF y stickers
     // ------------------------------------------------------------------------------------------
 
@@ -1869,6 +1894,13 @@ class ExploreFragment : Fragment() {
                     leaveBackgroundMode(wv)
                     if (!isResumed) wv.onPause()
                 }
+            }
+            // que la página cuente ahora mismo lo que suena (sirve también sin canal de mensajes)
+            "report" -> wv.evaluateJavascript(MEDIA_STATE_SCRIPT) { raw -> onMediaMessage(raw) }
+            else -> if (command.startsWith("seek:")) {
+                // ir a ese milisegundo (al tocar una línea de la letra); solo números, nada más llega a la página
+                val ms = command.removePrefix("seek:").toLongOrNull()?.coerceAtLeast(0) ?: return
+                wv.evaluateJavascript("window.__neonMediaCommand && window.__neonMediaCommand('seek:$ms')", null)
             }
         }
     }

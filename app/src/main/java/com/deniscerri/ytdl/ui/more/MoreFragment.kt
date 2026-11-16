@@ -21,6 +21,7 @@ import androidx.preference.PreferenceManager
 import com.deniscerri.ytdl.MainActivity
 import com.deniscerri.ytdl.R
 import com.deniscerri.ytdl.database.viewmodel.DownloadViewModel
+import com.deniscerri.ytdl.ui.lyrics.LyricsDialog
 import com.deniscerri.ytdl.ui.more.settings.SettingsActivity
 import com.deniscerri.ytdl.ui.more.terminal.TerminalActivity
 import com.deniscerri.ytdl.util.NavbarUtil
@@ -132,6 +133,11 @@ class MoreFragment : Fragment() {
         view.findViewById<TextView>(R.id.neon_updates).apply {
             text = NeonUpdates.menuLabel(requireContext())
             setOnClickListener { NeonUpdates.show(requireActivity()) }
+        }
+
+        // aquí, fuera de Explorar, lo que suena es "Escuchar" (la página se cierra al cambiar de pestaña)
+        view.findViewById<TextView>(R.id.neon_lyrics).setOnClickListener {
+            LyricsDialog.show(requireActivity().supportFragmentManager, preferMusic = true)
         }
 
     }

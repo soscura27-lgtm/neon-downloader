@@ -6,8 +6,8 @@
  *      (document.hidden / visibilityState siempre "visible" y sin eventos visibilitychange). Así YouTube
  *      no pausa el vídeo al salir de la app, igual que con Premium.
  *   2. En YouTube marca actividad cada minuto para que no aparezca "¿Sigues viendo?".
- *   3. Avisa a la app de lo que suena (título, canal, segundo, si está en pausa) para la notificación y
- *      los controles, y obedece sus órdenes: reproducir y pausar.
+ *   3. Avisa a la app de lo que suena (título, canal, segundo, si está en pausa) para la notificación, los
+ *      controles y la letra, y obedece sus órdenes: reproducir, pausar, anterior, siguiente e ir a un segundo.
  */
 (function () {
   'use strict';
@@ -88,9 +88,20 @@
       }
     } catch (e) { /* sin Media Session */ }
     var playing = !!(media && !media.paused && !media.ended && !media.muted);
-    var position = media && isFinite(media.currentTime) ? Math.floor(media.currentTime) : 0;
+    var exact = media && isFinite(media.currentTime) ? media.currentTime : 0;
     var duration = media && isFinite(media.duration) ? Math.floor(media.duration) : 0;
-    return { p: playing, c: position, d: duration, t: title, a: artist, u: location.href };
+    return {
+      p: playing,
+      c: Math.floor(exact),
+      // el mismo segundo en milisegundos, si está cargando (el segundo no avanza) y la velocidad: para la letra
+      ms: Math.round(exact * 1000),
+      w: !!(playing && media.readyState < 3),
+      r: media && media.playbackRate > 0 ? media.playbackRate : 1,
+      d: duration,
+      t: title,
+      a: artist,
+      u: location.href
+    };
   }
 
   // La app también puede preguntar directamente (WebView antiguos sin canal de mensajes).
@@ -194,9 +205,25 @@
     return true;
   }
 
+  // Ir a un milisegundo (al tocar una línea de la letra): con el reproductor de YouTube si está, si no, directo
+  function seekTo(ms) {
+    if (!isFinite(ms) || ms < 0) { return false; }
+    var player = document.getElementById('movie_player');
+    try {
+      if (player && typeof player.seekTo === 'function') { player.seekTo(ms / 1000, true); return true; }
+    } catch (e) { /* se prueba con el vídeo */ }
+    var media = mainMedia();
+    if (!media) { return false; }
+    try { media.currentTime = ms / 1000; } catch (e) { return false; }
+    return true;
+  }
+
   root.__neonMediaCommand = function (command) {
     if (command === 'next') { return skip(1); }
     if (command === 'previous') { return skip(-1); }
+    if (typeof command === 'string' && command.indexOf('seek:') === 0) {
+      return seekTo(parseInt(command.substring(5), 10));
+    }
     var media = mainMedia();
     if (!media) { return false; }
     try {
@@ -211,21 +238,34 @@
   };
 
   var lastKey = '';
-  function report(force) {
+  // always: se manda aunque no haya cambiado nada visible (saltos, cargas, velocidad: el segundo exacto importa)
+  function report(force, always) {
     var bridge = root.neonMedia;
     if (!bridge || typeof bridge.postMessage !== 'function') { return; }
     var current = state();
     var key = current.p + '|' + current.t + '|' + current.a + '|' + current.u;
     // mientras suena se manda cada pocos segundos (el segundo cambia); en pausa, solo si algo cambió
-    if (key === lastKey && !(force && current.p)) { return; }
+    if (!always && key === lastKey && !(force && current.p)) { return; }
     lastKey = key;
     try { bridge.postMessage(JSON.stringify(current)); } catch (e) { /* la app ya no escucha */ }
   }
 
-  ['play', 'playing', 'pause', 'ended', 'emptied', 'loadedmetadata', 'volumechange'].forEach(function (type) {
+  ['play', 'pause', 'ended', 'emptied', 'loadedmetadata', 'volumechange'].forEach(function (type) {
     document.addEventListener(type, function () {
-      setTimeout(function () { report(false); }, 0);
+      setTimeout(function () { report(false, false); }, 0);
     }, true);
   });
-  setInterval(function () { report(true); }, 4000);
+
+  // Saltos, cargas y cambios de velocidad: se cuenta el segundo exacto (agrupando los que llegan juntos)
+  var timingTimer = 0;
+  ['playing', 'seeked', 'waiting', 'ratechange'].forEach(function (type) {
+    document.addEventListener(type, function () {
+      if (timingTimer) { return; }
+      timingTimer = setTimeout(function () {
+        timingTimer = 0;
+        report(false, true);
+      }, 120);
+    }, true);
+  });
+  setInterval(function () { report(true, false); }, 4000);
 })();

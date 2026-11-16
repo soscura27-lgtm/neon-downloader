@@ -149,6 +149,22 @@
                 android:paddingHorizontal="15dp"
                 app:drawableStartCompat="@drawable/ic_power" />
 
+            <!-- Letra: solo la letra de lo que suena, para leerla o copiarla -->
+            <TextView
+                android:id="@+id/neon_lyrics"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:drawablePadding="35dp"
+                android:textSize="16sp"
+                android:paddingVertical="15dp"
+                android:text="@string/neon_lyrics_more"
+                android:textStyle="bold"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?android:attr/selectableItemBackground"
+                android:paddingHorizontal="15dp"
+                app:drawableStartCompat="@drawable/ic_lyrics" />
+
             <!-- Versión y novedades: compilación instalada y lista de cambios -->
             <TextView
                 android:id="@+id/neon_updates"

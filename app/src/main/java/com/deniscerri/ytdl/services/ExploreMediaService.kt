@@ -241,8 +241,8 @@ class ExploreMediaService : Service() {
                 .setActions(actions)
                 .setState(
                     if (state.playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
-                    state.positionSec * 1000,
-                    if (state.playing) 1f else 0f
+                    state.positionMs,
+                    if (state.playing) state.rate else 0f
                 )
                 .build()
         )

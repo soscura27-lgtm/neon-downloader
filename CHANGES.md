@@ -88,6 +88,18 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
   historial (`assets/neon_changelog.json`, no se sube al repositorio). Aviso "¡Actualizada!" al abrir una compilación
   distinta (`MainActivity`), fila en Más, opción en el menú de Explorar y comprobación de la última compilación
   publicada (las notas de cada Release llevan `neon-build:N`).
+- **Letra de lo que suena** (`ui/lyrics/`: `LyricsDialog.kt`, `LyricsFinder.kt`, `YoutubeMusicLyrics.kt`,
+  `NowPlaying.kt`; `dialog_lyrics.xml`, `item_lyrics_line.xml`, `lyrics_menu.xml`): pantalla completa con solo la
+  letra, que sigue lo que suena en la página de Explorar (`ExploreBackgroundPlayback`) o en `MusicService` (por un
+  `MediaController`) y cambia sola de canción. Fuentes: la API interna de YouTube Music (`next` para el nombre real,
+  el tipo de vídeo y la pestaña "Letra"; `browse` con el cliente de Android para la letra con tiempos y con el web
+  para el texto) y LRCLIB (`LrcLibUtil`, ya existente). Los tiempos solo se usan si valen para ese vídeo (la canción
+  misma, o la misma duración ±3 s); si no, la letra se enseña como texto. Copiar, seleccionar texto, compartir,
+  tamaño, ajuste de tiempo, tocar una línea para ir ahí, búsqueda manual en LRCLIB (la elección se recuerda por
+  canción) y pantalla encendida mientras suena. La página cuenta ahora el milisegundo exacto, si está cargando y la
+  velocidad, avisa al saltar (`seeked`, `waiting`, `playing`, `ratechange`) y acepta `seek:<ms>`; la notificación
+  solo se vuelve a pintar si cambia algo visible o cada 4 s. Entradas: barra de "Escuchar", hoja del botón de la
+  esquina, menú ⋮ de Explorar y Más. Se tradujeron al español los textos de letras de YTDLnis.
 - Icono de cohete y planeta (vector adaptable, monocromo y PNG heredados).
 
 ## Proyecto
@@ -95,5 +107,7 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
 - Solo se compila `arm64-v8a`; archivos de salida `NeonDownloader-*.apk`.
 - Compilación solo en GitHub Actions (`.github/workflows/build-apk.yml`, `scripts/ci/`): APK firmado en
   cada push y publicado en Releases (`apk-main` = Latest, `apk-<rama>` = prueba). Firma estable con la
-  clave personal cifrada (`scripts/ci/neon-signing.env.enc`) y un único secreto (`NEON_FIRMA`). Se reemplazaron los flujos de GitHub del original y
+  clave personal cifrada (`scripts/ci/neon-signing.env.enc`) y un único secreto (`NEON_FIRMA`). Diagnóstico aparte
+  (no compila): `.github/workflows/probar-letras.yml` + `scripts/ci/probar_letras.py` comprueban que YouTube Music y
+  LRCLIB siguen respondiendo como espera la app. Se reemplazaron los flujos de GitHub del original y
   se quitaron los README traducidos (el README original queda en `UPSTREAM-README.md`).

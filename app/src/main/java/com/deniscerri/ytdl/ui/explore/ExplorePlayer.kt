@@ -28,6 +28,8 @@ import com.google.common.util.concurrent.ListenableFuture
  *
  * La conexión vive mientras la pantalla está visible: se abre al empezar (si el servicio ya está sonando) o al
  * pedir una pista, y se cierra al salir de la pantalla. El audio no se interrumpe por eso.
+ *
+ * El botón de la letra abre solo la letra de lo que suena (ver ui/lyrics).
  */
 class ExplorePlayer(
     context: Context,
@@ -37,8 +39,11 @@ class ExplorePlayer(
     private val playPause: ImageButton,
     private val next: ImageButton,
     private val stop: ImageButton,
+    private val lyrics: ImageButton,
     /** El usuario pulsó reproducir en la barra: el vídeo de la página tiene que callarse para que no suenen los dos. */
     private val onResumeRequested: () -> Unit,
+    /** El usuario quiere ver la letra de lo que suena. */
+    private val onLyrics: () -> Unit,
     /** Una pista no se pudo reproducir (el servicio pasa solo a la siguiente). */
     private val onProblem: (String) -> Unit
 ) : DefaultLifecycleObserver, Player.Listener {
@@ -60,6 +65,7 @@ class ExplorePlayer(
         next.setOnClickListener { controller?.seekToNextMediaItem() }
         playPause.setOnClickListener { togglePlayPause() }
         stop.setOnClickListener { stopPlayback() }
+        lyrics.setOnClickListener { onLyrics() }
         refresh()
     }
 

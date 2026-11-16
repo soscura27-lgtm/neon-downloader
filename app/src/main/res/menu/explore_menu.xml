@@ -7,6 +7,9 @@
         android:id="@+id/explore_menu_sections"
         android:title="@string/sections_title" />
     <item
+        android:id="@+id/explore_menu_lyrics"
+        android:title="@string/neon_lyrics_menu" />
+    <item
         android:id="@+id/explore_menu_account"
         android:title="@string/explore_account_menu" />
     <item

@@ -947,4 +947,59 @@
     <string name="neon_updates_new_count">Nuevo desde tu versión anterior: %1$d</string>
     <string name="neon_updates_new_badge">NUEVO</string>
     <string name="neon_updates_empty">El historial de cambios llega con las compilaciones de GitHub.</string>
+
+    <!-- Letra de lo que suena -->
+    <string name="neon_lyrics_title">Letra</string>
+    <string name="neon_lyrics_close">Cerrar la letra</string>
+    <string name="neon_lyrics_open">Ver la letra</string>
+    <string name="neon_lyrics_action">Ver la letra</string>
+    <string name="neon_lyrics_action_sub">Solo la letra de la canción, para leerla o copiarla</string>
+    <string name="neon_lyrics_menu">Letra de lo que suena</string>
+    <string name="neon_lyrics_more">Letra de lo que suena</string>
+    <string name="neon_lyrics_waiting">Viendo qué suena…</string>
+    <string name="neon_lyrics_loading">Buscando la letra…</string>
+    <string name="neon_lyrics_not_found">No encontré la letra de esta canción.</string>
+    <string name="neon_lyrics_offline">No se pudo buscar la letra. Revisa tu conexión a internet.</string>
+    <string name="neon_lyrics_nothing">Ahora no suena nada.\nPon una canción en Explorar o en Escuchar y aquí aparecerá su letra.</string>
+    <string name="neon_lyrics_retry">Reintentar</string>
+    <string name="neon_lyrics_search">Buscar otra letra</string>
+    <string name="neon_lyrics_search_song">Buscar una canción</string>
+    <string name="neon_lyrics_search_hint">Artista y canción</string>
+    <string name="neon_lyrics_results">Elige la letra</string>
+    <string name="neon_lyrics_no_results">No encontré ninguna letra con eso</string>
+    <string name="neon_lyrics_chosen">Listo: esta canción usará siempre esta letra</string>
+    <string name="neon_lyrics_copy">Copiar letra</string>
+    <string name="neon_lyrics_copied">Letra copiada</string>
+    <string name="neon_lyrics_select">Seleccionar</string>
+    <string name="neon_lyrics_lines">Ver por líneas</string>
+    <string name="neon_lyrics_select_hint">Mantén pulsado el texto para elegir qué parte copiar</string>
+    <string name="neon_lyrics_share">Compartir letra</string>
+    <string name="neon_lyrics_bigger">Letra más grande</string>
+    <string name="neon_lyrics_smaller">Letra más pequeña</string>
+    <string name="neon_lyrics_offset">Ajustar el tiempo</string>
+    <string name="neon_lyrics_offset_earlier">Adelantar la letra medio segundo</string>
+    <string name="neon_lyrics_offset_later">Atrasar la letra medio segundo</string>
+    <string name="neon_lyrics_offset_minus">−0,5 s</string>
+    <string name="neon_lyrics_offset_plus">+0,5 s</string>
+    <string name="neon_lyrics_offset_value">%1$s s</string>
+    <string name="neon_lyrics_offset_done">Listo</string>
+    <string name="neon_lyrics_reload">Volver a buscar la letra</string>
+    <string name="neon_lyrics_source_ytm">YouTube Music</string>
+    <string name="neon_lyrics_source_lrclib">LRCLIB</string>
+    <string name="neon_lyrics_source_synced">Sincronizada · %1$s · toca una línea para ir a esa parte</string>
+    <string name="neon_lyrics_source_plain">Letra · %1$s</string>
+
+    <!-- Letras al descargar audio (textos de YTDLnis que aún no estaban traducidos) -->
+    <string name="lyrics">Letra</string>
+    <string name="embed_lyrics">Incrustar la letra</string>
+    <string name="save_lrc_file">Guardar archivo .lrc</string>
+    <string name="lyrics_offset">Desfase</string>
+    <string name="lyrics_not_found">No se encontró la letra</string>
+    <string name="lyrics_unsynced">La letra no tiene tiempos; no hay nada que ajustar</string>
+    <string name="lyrics_source">Letras de lrclib.net</string>
+    <string name="lyrics_no_preview">No se puede escuchar aquí; la letra se añadirá igual al descargar</string>
+    <string name="lyrics_synced">Sincronizada</string>
+    <string name="lyrics_plain">Solo texto</string>
+    <string name="embed_lyrics_summary">Busca la letra en lrclib.net y la mete en las descargas de audio</string>
+    <string name="save_lrc_file_summary">Guarda la letra sincronizada como archivo .lrc junto a las descargas de audio</string>
 </resources>

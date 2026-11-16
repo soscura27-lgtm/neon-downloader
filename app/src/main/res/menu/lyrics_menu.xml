@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menú de la pantalla de la letra -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/lyrics_menu_share"
+        android:icon="@drawable/baseline_share_24"
+        android:title="@string/neon_lyrics_share"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/lyrics_menu_search"
+        android:icon="@drawable/ic_search"
+        android:title="@string/neon_lyrics_search"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/lyrics_menu_bigger"
+        android:title="@string/neon_lyrics_bigger" />
+    <item
+        android:id="@+id/lyrics_menu_smaller"
+        android:title="@string/neon_lyrics_smaller" />
+    <item
+        android:id="@+id/lyrics_menu_offset"
+        android:title="@string/neon_lyrics_offset"
+        android:visible="false" />
+    <item
+        android:id="@+id/lyrics_menu_reload"
+        android:title="@string/neon_lyrics_reload" />
+</menu>

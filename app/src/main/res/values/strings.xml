@@ -1000,4 +1000,45 @@
     <string name="neon_updates_new_count">New since your previous version: %1$d</string>
     <string name="neon_updates_new_badge">NEW</string>
     <string name="neon_updates_empty">The change history comes with the GitHub builds.</string>
+
+    <!-- Letra de lo que suena -->
+    <string name="neon_lyrics_title">Lyrics</string>
+    <string name="neon_lyrics_close">Close lyrics</string>
+    <string name="neon_lyrics_open">Show lyrics</string>
+    <string name="neon_lyrics_action">Show lyrics</string>
+    <string name="neon_lyrics_action_sub">Just the song lyrics, to read or copy them</string>
+    <string name="neon_lyrics_menu">Lyrics of what\'s playing</string>
+    <string name="neon_lyrics_more">Lyrics of what\'s playing</string>
+    <string name="neon_lyrics_waiting">Checking what\'s playing…</string>
+    <string name="neon_lyrics_loading">Looking for the lyrics…</string>
+    <string name="neon_lyrics_not_found">Couldn\'t find the lyrics of this song.</string>
+    <string name="neon_lyrics_offline">Couldn\'t look for the lyrics. Check your internet connection.</string>
+    <string name="neon_lyrics_nothing">Nothing is playing right now.\nPlay a song in Explore or Listen and its lyrics will show up here.</string>
+    <string name="neon_lyrics_retry">Retry</string>
+    <string name="neon_lyrics_search">Find other lyrics</string>
+    <string name="neon_lyrics_search_song">Find a song</string>
+    <string name="neon_lyrics_search_hint">Artist and song</string>
+    <string name="neon_lyrics_results">Choose the lyrics</string>
+    <string name="neon_lyrics_no_results">No lyrics found for that</string>
+    <string name="neon_lyrics_chosen">Done: this song will always use these lyrics</string>
+    <string name="neon_lyrics_copy">Copy lyrics</string>
+    <string name="neon_lyrics_copied">Lyrics copied</string>
+    <string name="neon_lyrics_select">Select</string>
+    <string name="neon_lyrics_lines">Line by line</string>
+    <string name="neon_lyrics_select_hint">Long-press the text to choose which part to copy</string>
+    <string name="neon_lyrics_share">Share lyrics</string>
+    <string name="neon_lyrics_bigger">Bigger text</string>
+    <string name="neon_lyrics_smaller">Smaller text</string>
+    <string name="neon_lyrics_offset">Adjust timing</string>
+    <string name="neon_lyrics_offset_earlier">Show the lyrics half a second earlier</string>
+    <string name="neon_lyrics_offset_later">Show the lyrics half a second later</string>
+    <string name="neon_lyrics_offset_minus">−0.5 s</string>
+    <string name="neon_lyrics_offset_plus">+0.5 s</string>
+    <string name="neon_lyrics_offset_value">%1$s s</string>
+    <string name="neon_lyrics_offset_done">Done</string>
+    <string name="neon_lyrics_reload">Search the lyrics again</string>
+    <string name="neon_lyrics_source_ytm">YouTube Music</string>
+    <string name="neon_lyrics_source_lrclib">LRCLIB</string>
+    <string name="neon_lyrics_source_synced">Synced · %1$s · tap a line to jump there</string>
+    <string name="neon_lyrics_source_plain">Lyrics · %1$s</string>
 </resources>

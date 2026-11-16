@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una línea de la letra (la que suena se marca; al tocarla, la canción va a esa parte) -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center"
+    android:lineSpacingMultiplier="1.08"
+    android:paddingHorizontal="28dp"
+    android:paddingVertical="7dp"
+    android:textColor="?attr/colorOnSurface"
+    android:textStyle="bold" />

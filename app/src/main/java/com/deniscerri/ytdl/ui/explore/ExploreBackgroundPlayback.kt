@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -37,7 +38,13 @@ object ExploreBackgroundPlayback {
         val durationSec: Long,
         val title: String,
         val artist: String,
-        val url: String
+        val url: String,
+        /** El mismo segundo, en milisegundos (para seguir la letra línea a línea). */
+        val positionMs: Long = positionSec * 1000,
+        /** Está cargando: el segundo no avanza aunque esté en marcha. */
+        val buffering: Boolean = false,
+        /** Velocidad de reproducción (1 = normal). */
+        val rate: Float = 1f
     ) {
         /** Vídeo de YouTube que suena (null si es otra web). */
         val videoId: String?
@@ -53,13 +60,17 @@ object ExploreBackgroundPlayback {
                 return runCatching {
                     val text = if (raw.startsWith("\"")) JSONObject("{\"v\":$raw}").getString("v") else raw
                     val json = JSONObject(text)
+                    val seconds = json.optLong("c").coerceAtLeast(0)
                     State(
                         playing = json.optBoolean("p"),
-                        positionSec = json.optLong("c").coerceAtLeast(0),
+                        positionSec = seconds,
                         durationSec = json.optLong("d").coerceAtLeast(0),
                         title = json.optString("t"),
                         artist = json.optString("a"),
-                        url = json.optString("u")
+                        url = json.optString("u"),
+                        positionMs = if (json.has("ms")) json.optLong("ms").coerceAtLeast(0) else seconds * 1000,
+                        buffering = json.optBoolean("w"),
+                        rate = json.optDouble("r", 1.0).toFloat().takeIf { it > 0f && it.isFinite() } ?: 1f
                     )
                 }.getOrNull()
             }
@@ -69,6 +80,12 @@ object ExploreBackgroundPlayback {
     /** Lo último que contó la página (null si no hay página abierta). */
     var state: State? = null
         private set
+
+    /** Cuándo llegó [state] (reloj de SystemClock.elapsedRealtime). */
+    private var stateTime = 0L
+
+    /** Última vez que se actualizó la notificación. */
+    private var lastRefresh = 0L
 
     /** Quien ejecuta las órdenes en la página: la pantalla de Explorar mientras existe. */
     private var commander: ((String) -> Unit)? = null
@@ -99,15 +116,46 @@ object ExploreBackgroundPlayback {
         }
     }
 
-    /** Orden para la página: "play", "pause", "toggle" o "suspend" (ya no sonar en segundo plano). */
+    /**
+     * Orden para la página: "play", "pause", "toggle", "next", "previous", "seek:<milisegundo>", "report" (que cuente
+     * ya lo que suena) o "suspend" (ya no sonar en segundo plano).
+     */
     fun command(command: String) {
         commander?.invoke(command)
     }
 
-    /** La página contó algo nuevo: se actualiza la notificación si está a la vista. */
+    /**
+     * La página contó algo nuevo: se actualiza la notificación si cambió lo que se ve en ella (título, pausa, un
+     * salto en la canción) o cada pocos segundos para el segundo en el que va.
+     */
     fun update(newState: State) {
+        val old = state
+        val expected = if (old != null) positionMs() else 0L
+        val now = SystemClock.elapsedRealtime()
         state = newState
-        ExploreMediaService.refresh()
+        stateTime = now
+        val changed = old == null ||
+                old.playing != newState.playing ||
+                old.title != newState.title ||
+                old.artist != newState.artist ||
+                old.url != newState.url ||
+                old.durationSec != newState.durationSec ||
+                kotlin.math.abs(newState.positionMs - expected) > JUMP_MS
+        if (changed || now - lastRefresh >= REFRESH_MS) {
+            lastRefresh = now
+            ExploreMediaService.refresh()
+        }
+    }
+
+    /** En qué milisegundo va la página ahora (lo último que contó más lo que ha pasado desde entonces). */
+    fun positionMs(): Long {
+        val current = state ?: return 0L
+        var position = current.positionMs
+        if (current.playing && !current.buffering) {
+            position += ((SystemClock.elapsedRealtime() - stateTime) * current.rate).toLong()
+        }
+        if (current.durationSec > 0) position = position.coerceAtMost(current.durationSec * 1000)
+        return position.coerceAtLeast(0L)
     }
 
     /** El servicio (y su notificación) está en marcha o a punto de arrancar. */
@@ -155,4 +203,10 @@ object ExploreBackgroundPlayback {
     }
 
     private const val RELEASE_DELAY_MS = 3000L
+
+    /** Cada cuánto se actualiza como mucho la notificación si solo avanza el segundo. */
+    private const val REFRESH_MS = 4000L
+
+    /** Una diferencia mayor que esta entre lo esperado y lo contado es un salto (el usuario movió la canción). */
+    private const val JUMP_MS = 2500L
 }

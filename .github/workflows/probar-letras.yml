@@ -1,0 +1,34 @@
+# Comprueba que las fuentes de letras de la app (YouTube Music y LRCLIB) siguen respondiendo como la app espera.
+# No compila la app (eso lo hace solo build-apk.yml). Se lanza a mano (Actions → "Comprobar fuentes de letras" →
+# Run workflow) o sola cuando cambia el script de prueba.
+name: Comprobar fuentes de letras
+
+on:
+  workflow_dispatch:
+    inputs:
+      videos:
+        description: Vídeos de YouTube a probar, separados por espacios (vacío = los de siempre)
+        required: false
+        default: ''
+  push:
+    paths:
+      - 'scripts/ci/probar_letras.py'
+      - '.github/workflows/probar-letras.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probar:
+    name: Letras
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Probar YouTube Music y LRCLIB
+        env:
+          VIDEOS: ${{ inputs.videos }}
+        # sin comillas a propósito: cada vídeo es un argumento
+        run: python3 scripts/ci/probar_letras.py $VIDEOS
