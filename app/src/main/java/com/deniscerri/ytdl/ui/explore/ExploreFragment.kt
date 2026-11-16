@@ -1,12 +1,12 @@
 package com.deniscerri.ytdl.ui.explore
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
@@ -20,6 +20,8 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -32,8 +34,8 @@ import android.widget.FrameLayout
 import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.view.isVisible
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
@@ -45,8 +47,6 @@ import androidx.media3.common.MediaItem
 import androidx.navigation.fragment.findNavController
 import androidx.preference.PreferenceManager
 import androidx.webkit.ScriptHandler
-import androidx.webkit.UserAgentMetadata
-import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.deniscerri.ytdl.R
@@ -60,11 +60,9 @@ import com.deniscerri.ytdl.database.viewmodel.DownloadViewModel
 import com.deniscerri.ytdl.database.viewmodel.ResultViewModel
 import com.deniscerri.ytdl.ui.downloads.QueuePlacementDialog
 import com.deniscerri.ytdl.util.QueuePlacement
-import com.google.android.material.chip.Chip
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.CancellationException
@@ -78,8 +76,12 @@ import org.json.JSONObject
 import java.util.Locale
 
 /**
- * Explorar: YouTube dentro de la app (buscador, inicio, suscripciones, biblioteca) con inicio de sesión
- * de Google, y un botón para descargar el vídeo, la playlist o el Mix que se está viendo.
+ * Explorar: YouTube dentro de la app (buscador, inicio, suscripciones, biblioteca) con inicio de sesión de
+ * Google, apartados de películas y series gratis y legales, y GIF y stickers.
+ *
+ * Todas las opciones de descarga viven en un solo botón en la esquina de la barra superior (nada flota encima
+ * del vídeo): descargar en vídeo o audio, escuchar en segundo plano, elegir vídeos, ver los comentarios con GIF,
+ * guardar la miniatura o las imágenes de una publicación, o descargar de cualquier otra web compatible.
  */
 class ExploreFragment : Fragment() {
 
@@ -94,14 +96,12 @@ class ExploreFragment : Fragment() {
     private var webView: WebView? = null
     private lateinit var searchField: TextInputEditText
     private lateinit var progress: LinearProgressIndicator
-    private lateinit var fab: ExtendedFloatingActionButton
-    private lateinit var selectFab: ExtendedFloatingActionButton
-    private lateinit var listenFab: ExtendedFloatingActionButton
+    private lateinit var downloadCorner: View
+    private lateinit var downloadLabel: TextView
+    private lateinit var moreButton: MaterialButton
     private lateinit var player: ExplorePlayer
-    private lateinit var kindChip: Chip
     private lateinit var errorView: View
     private lateinit var fullscreenContainer: FrameLayout
-    private lateinit var accountButton: MaterialButton
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -113,10 +113,21 @@ class ExploreFragment : Fragment() {
 
     private var fetchJob: Job? = null
     private var progressDialog: AlertDialog? = null
+    private var actionsSheet: BottomSheetDialog? = null
+    private var sectionsSheet: BottomSheetDialog? = null
+    private var commentsViewer: CommentsViewer? = null
 
     private var adBlockScript: ScriptHandler? = null
 
-    // si el formato se cambia desde el selector masivo, el botón de aquí se actualiza solo
+    /** Subida de archivos desde la página (fotos, GIF...): la respuesta del selector va a este callback. */
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private val fileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val callback = fileCallback ?: return@registerForActivityResult
+        fileCallback = null
+        callback.onReceiveValue(chosenFiles(result.resultCode, result.data))
+    }
+
+    // si el formato se cambia desde el selector masivo, el botón de la esquina se actualiza solo
     private val kindListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == DownloadKind.PREF_KEY) showKind()
     }
@@ -142,27 +153,20 @@ class ExploreFragment : Fragment() {
 
         searchField = view.findViewById(R.id.explore_search)
         progress = view.findViewById(R.id.explore_progress)
-        fab = view.findViewById(R.id.explore_fab)
-        selectFab = view.findViewById(R.id.explore_fab_select)
-        listenFab = view.findViewById(R.id.explore_fab_listen)
-        kindChip = view.findViewById(R.id.explore_chip_kind)
+        downloadCorner = view.findViewById(R.id.explore_download_corner)
+        downloadLabel = view.findViewById(R.id.explore_download_label)
+        moreButton = view.findViewById(R.id.explore_more)
         errorView = view.findViewById(R.id.explore_error)
         fullscreenContainer = view.findViewById(R.id.explore_fullscreen)
-        accountButton = view.findViewById(R.id.explore_account)
 
         setupSearch()
-        view.findViewById<MaterialButton>(R.id.explore_subscriptions).setOnClickListener {
-            load(YoutubeUrls.SUBSCRIPTIONS)
-        }
-        accountButton.setOnClickListener { showAccountMenu(it) }
-        view.findViewById<MaterialButton>(R.id.explore_more).setOnClickListener { showMoreMenu(it) }
+        view.findViewById<MaterialButton>(R.id.explore_sections).setOnClickListener { showSections() }
+        moreButton.setOnClickListener { showMoreMenu(it) }
+        downloadCorner.setOnClickListener { showActions() }
         view.findViewById<View>(R.id.explore_retry).setOnClickListener {
             errorView.visibility = View.GONE
             webView?.reload()
         }
-        fab.setOnClickListener { onFabClick() }
-        selectFab.setOnClickListener { openBulkSelect(currentPage) }
-        listenFab.setOnClickListener { onListenClick() }
         player = ExplorePlayer(
             context = requireContext(),
             bar = view.findViewById(R.id.explore_player_bar),
@@ -176,12 +180,6 @@ class ExploreFragment : Fragment() {
             onProblem = { reason -> toastText(getString(R.string.music_error, reason)) }
         )
         viewLifecycleOwner.lifecycle.addObserver(player)
-        kindChip.setOnClickListener {
-            DownloadKind.choose(requireContext(), DownloadKind.load(prefs)) { kind ->
-                DownloadKind.save(prefs, kind)
-                showKind()
-            }
-        }
         showKind()
         prefs.registerOnSharedPreferenceChangeListener(kindListener)
 
@@ -189,7 +187,6 @@ class ExploreFragment : Fragment() {
         setupBackHandling()
         observeDuplicates()
         observeDownloadLevel(view)
-        updateAccountUi()
     }
 
     // ------------------------------------------------------------------------------------------
@@ -212,9 +209,10 @@ class ExploreFragment : Fragment() {
             mediaPlaybackRequiresUserGesture = false
             allowFileAccess = false
             allowContentAccess = false
+            // las webs de películas y series sirven imágenes de otros dominios
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
         applyBrowserMode(wv)
-        hideWebViewIdentity(wv.settings)
         applyAdBlock(wv)
 
         wv.webViewClient = ExploreClient()
@@ -251,55 +249,17 @@ class ExploreFragment : Fragment() {
         }
     }
 
-    private fun buildUserAgent(context: Context, desktop: Boolean): String {
-        val default = WebSettings.getDefaultUserAgent(context)
-        val chrome = Regex("Chrome/([0-9.]+)").find(default)?.groupValues?.get(1) ?: "138.0.0.0"
-        return if (desktop) {
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chrome Safari/537.36"
-        } else {
-            // sin las marcas de WebView ("; wv" y "Version/4.0") para que parezca Chrome
-            default.replace("; wv", "").replace(" Version/4.0", "")
-        }
-    }
-
     private fun applyBrowserMode(wv: WebView) {
         val desktop = state.desktopMode
         wv.settings.apply {
-            userAgentString = buildUserAgent(wv.context, desktop)
+            userAgentString = ExploreBrowser.userAgent(wv.context, desktop)
             useWideViewPort = true
             loadWithOverviewMode = desktop
             setSupportZoom(desktop)
             builtInZoomControls = desktop
             displayZoomControls = false
         }
-    }
-
-    /**
-     * Google rechaza el inicio de sesión cuando detecta un WebView incrustado. Se quitan las dos pistas
-     * más claras: la cabecera X-Requested-With y la marca "Android WebView" de los client hints.
-     */
-    private fun hideWebViewIdentity(settings: WebSettings) {
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
-            runCatching {
-                WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
-            }
-        }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
-            runCatching {
-                val current = WebSettingsCompat.getUserAgentMetadata(settings)
-                val brands = current.brandVersionList.map { brand ->
-                    if (brand.brand.contains("WebView", ignoreCase = true)) {
-                        UserAgentMetadata.BrandVersion.Builder(brand).setBrand("Google Chrome").build()
-                    } else {
-                        brand
-                    }
-                }
-                WebSettingsCompat.setUserAgentMetadata(
-                    settings,
-                    UserAgentMetadata.Builder(current).setBrandVersionList(brands).build()
-                )
-            }
-        }
+        ExploreBrowser.hideWebViewIdentity(wv.context, wv.settings, desktop)
     }
 
     private fun load(url: String) {
@@ -335,7 +295,7 @@ class ExploreFragment : Fragment() {
      */
     private fun injectAdBlockFallback(view: WebView?, url: String?) {
         if (!AdBlocker.enabled || adBlockScript != null || view == null) return
-        if (!YoutubeUrls.isYoutubeHost(runCatching { Uri.parse(url).host }.getOrNull())) return
+        if (!YoutubeUrls.isYoutubeUrl(url)) return
         view.evaluateJavascript(AdBlocker.script(view.context), null)
     }
 
@@ -378,7 +338,7 @@ class ExploreFragment : Fragment() {
             injectAdBlockFallback(view, url)
         }
 
-        // YouTube cambia de página sin recargar: aquí se entera la app de cada cambio
+        // YouTube cambia de página sin recargar (también al deslizar Shorts): aquí se entera la app de cada cambio
         override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
             super.doUpdateVisitedHistory(view, url, isReload)
             onUrlChanged(url)
@@ -418,10 +378,6 @@ class ExploreFragment : Fragment() {
                 )
             )
             fullscreenContainer.visibility = View.VISIBLE
-            fab.hide()
-            selectFab.hide()
-            listenFab.hide()
-            kindChip.isVisible = false
         }
 
         override fun onHideCustomView() {
@@ -430,6 +386,27 @@ class ExploreFragment : Fragment() {
 
         override fun getDefaultVideoPoster(): Bitmap? {
             return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        }
+
+        // Películas y series con DRM (YouTube Películas, ViX, Plex...): la reproducción protegida necesita este permiso
+        override fun onPermissionRequest(request: PermissionRequest?) {
+            if (request == null) return
+            val protectedMedia = request.resources.filter { it == PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID }
+            if (protectedMedia.isNotEmpty()) {
+                request.grant(protectedMedia.toTypedArray())
+            } else {
+                request.deny()
+            }
+        }
+
+        // Subir fotos, GIF o stickers desde el teléfono donde la página lo permita
+        override fun onShowFileChooser(
+            webView: WebView?,
+            filePathCallback: ValueCallback<Array<Uri>>?,
+            fileChooserParams: FileChooserParams?
+        ): Boolean {
+            if (filePathCallback == null || fileChooserParams == null) return false
+            return openFileChooser(filePathCallback, fileChooserParams)
         }
     }
 
@@ -440,30 +417,46 @@ class ExploreFragment : Fragment() {
         customView = null
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
-        updateFab()
+        updateCorner()
     }
 
-    /** true = la navegación ya está resuelta aquí; false = que la cargue el WebView. */
+    /**
+     * true = la navegación ya está resuelta aquí; false = que la cargue el WebView.
+     * Explorar es un navegador: YouTube, el inicio de sesión de Google, las webs de películas y series y las de GIF
+     * se abren aquí. Los enlaces de salida de YouTube (descripciones y comentarios) se abren fuera, como siempre.
+     */
     private fun handleNavigation(uri: Uri, mainFrame: Boolean): Boolean {
         when (uri.scheme?.lowercase(Locale.ROOT)) {
             "http", "https" -> Unit
-            "about" -> return false
-            // intent://, vnd.youtube://, market://... son intentos de abrir otra app
-            else -> return true
-        }
-        val host = uri.host
-        if (YoutubeUrls.isInternalHost(host)) {
-            if (mainFrame && YoutubeUrls.isYoutubeHost(host) && uri.path == "/redirect") {
-                // enlaces de salida de descripciones y comentarios
-                uri.getQueryParameter("q")?.takeIf { it.isNotBlank() }?.let { openOutside(it) }
+            "about", "blob", "data" -> return false
+            "intent" -> {
+                if (mainFrame) followIntentFallback(uri.toString())
                 return true
             }
-            return false
+            // vnd.youtube://, market://, whatsapp://... son intentos de abrir otra app
+            else -> return true
         }
-        // contenido de otros sitios dentro de la página (anuncios, marcos): que lo cargue el WebView
-        if (!mainFrame) return false
-        openOutside(uri.toString())
-        return true
+        if (mainFrame && YoutubeUrls.isYoutubeHost(uri.host) && uri.path == "/redirect") {
+            uri.getQueryParameter("q")?.takeIf { it.isNotBlank() }?.let { openOutside(it) }
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Webs de películas y series que intentan abrir su app (intent://): si traen una dirección web de
+     * respaldo de la misma web, se sigue aquí. En YouTube se ignoran, como siempre.
+     */
+    private fun followIntentFallback(raw: String) {
+        if (YoutubeUrls.isYoutubeUrl(currentUrl)) return
+        val intent = runCatching { Intent.parseUri(raw, Intent.URI_INTENT_SCHEME) }.getOrNull() ?: return
+        val fallback = intent.getStringExtra("browser_fallback_url") ?: return
+        val fallbackHost = runCatching { Uri.parse(fallback).host }.getOrNull()?.lowercase(Locale.ROOT) ?: return
+        val currentHost = runCatching { Uri.parse(currentUrl).host }.getOrNull()?.lowercase(Locale.ROOT) ?: return
+        if (!isHttp(fallback)) return
+        val sameSite = fallbackHost == currentHost ||
+                fallbackHost.endsWith(".$currentHost") || currentHost.endsWith(".$fallbackHost")
+        if (sameSite) load(fallback)
     }
 
     private fun openOutside(url: String) {
@@ -489,11 +482,21 @@ class ExploreFragment : Fragment() {
         if (url.isNullOrBlank() || url == "about:blank" || view == null) return
         currentUrl = url
         currentPage = YoutubeUrls.parse(url)
-        updateFab()
+        updateCorner()
         if (!signInBlockedShown && (url.contains("/signin/rejected") || url.contains("disallowed_useragent"))) {
             signInBlockedShown = true
             showSignInBlocked()
         }
+    }
+
+    /** Lo que se ve AHORA en el navegador (al deslizar Shorts la dirección cambia sin recargar la página). */
+    private fun refreshPage(): YoutubeUrls.Page {
+        val url = webView?.url
+        if (!url.isNullOrBlank() && url != "about:blank") {
+            currentUrl = url
+            currentPage = YoutubeUrls.parse(url)
+        }
+        return currentPage
     }
 
     private fun setupBackHandling() {
@@ -570,7 +573,7 @@ class ExploreFragment : Fragment() {
     }
 
     // ------------------------------------------------------------------------------------------
-    // Menús
+    // Menús y apartados
     // ------------------------------------------------------------------------------------------
 
     private fun showMoreMenu(anchor: View) {
@@ -586,8 +589,8 @@ class ExploreFragment : Fragment() {
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.explore_menu_home -> load(YoutubeUrls.HOME)
-                R.id.explore_menu_library -> load(YoutubeUrls.LIBRARY)
-                R.id.explore_menu_history -> load(YoutubeUrls.HISTORY)
+                R.id.explore_menu_sections -> showSections()
+                R.id.explore_menu_account -> showAccountMenu(moreButton)
                 R.id.explore_menu_forward -> webView?.goForward()
                 R.id.explore_menu_reload -> webView?.reload()
                 R.id.explore_menu_desktop -> toggleDesktopMode()
@@ -596,8 +599,8 @@ class ExploreFragment : Fragment() {
                     val ask = !prefs.getBoolean(PREF_ASK_POSITION, true)
                     prefs.edit().putBoolean(PREF_ASK_POSITION, ask).apply()
                 }
-                R.id.explore_menu_copy -> copyLink(currentUrl)
-                R.id.explore_menu_external -> openInExternalBrowser(currentUrl)
+                R.id.explore_menu_copy -> copyLink(refreshUrl())
+                R.id.explore_menu_external -> openInExternalBrowser(refreshUrl())
             }
             true
         }
@@ -609,6 +612,27 @@ class ExploreFragment : Fragment() {
         state.desktopMode = !state.desktopMode
         applyBrowserMode(wv)
         wv.reload()
+    }
+
+    /** Apartados: secciones de YouTube, películas y series, apps de streaming y GIF/stickers. */
+    private fun showSections() {
+        sectionsSheet?.dismiss()
+        sectionsSheet = ExploreSections.show(requireContext()) { section -> openSection(section) }
+    }
+
+    private fun openSection(section: ExploreSections.Section) {
+        if (view == null) return
+        val url = section.url
+        if (url != null) {
+            load(url)
+            return
+        }
+        val intent = ExploreSections.launchIntent(requireContext(), section)
+        if (intent == null) {
+            toast(R.string.sections_app_missing)
+        } else {
+            runCatching { startActivity(intent) }.onFailure { toast(R.string.sections_app_missing) }
+        }
     }
 
     private fun showAccountMenu(anchor: View) {
@@ -649,22 +673,11 @@ class ExploreFragment : Fragment() {
                 cookie.contains("LOGIN_INFO=")
     }
 
-    private fun updateAccountUi() {
-        if (view == null) return
-        val attr = if (isSignedIn()) {
-            com.google.android.material.R.attr.colorPrimary
-        } else {
-            com.google.android.material.R.attr.colorOnSurface
-        }
-        accountButton.iconTint = ColorStateList.valueOf(MaterialColors.getColor(accountButton, attr))
-    }
-
     /** Se llama al terminar cada página: detecta cuando acaba de iniciarse sesión. */
     private fun checkSignIn() {
         val now = isSignedIn()
         val before = lastSignedIn
         lastSignedIn = now
-        updateAccountUi()
         if (before == false && now &&
             !prefs.getBoolean(PREF_ACCOUNT_PROMPTED, false) &&
             !prefs.getBoolean(PREF_USE_ACCOUNT, false)
@@ -725,7 +738,6 @@ class ExploreFragment : Fragment() {
             if (isAdded && view != null) {
                 applyDarkPreference(cookies)
                 lastSignedIn = false
-                updateAccountUi()
                 webView?.loadUrl(YoutubeUrls.HOME)
                 toast(R.string.explore_signed_out)
             }
@@ -795,49 +807,211 @@ class ExploreFragment : Fragment() {
     }
 
     // ------------------------------------------------------------------------------------------
-    // Descargas
+    // Botón de la esquina y hoja de opciones
     // ------------------------------------------------------------------------------------------
 
-    /** Pone en el botón el formato elegido: "Formato: Audio MP3". */
+    /** Debajo del icono de descarga, el formato elegido: "VÍDEO", "MP3" o "AUDIO". */
     private fun showKind() {
         if (view == null) return
-        val kind = DownloadKind.load(prefs)
-        kindChip.text = DownloadKind.chipLabel(requireContext(), kind)
-        kindChip.setChipIconResource(kind.iconRes)
+        downloadLabel.setText(DownloadKind.load(prefs).shortLabelRes)
+        updateCorner()
     }
 
-    private fun updateFab() {
+    /** El botón siempre está en la esquina; se ve apagado cuando en la página no hay nada que descargar. */
+    private fun updateCorner() {
         if (view == null) return
         val page = currentPage
-        if (customView != null) {
-            fab.hide()
-            selectFab.hide()
-            listenFab.hide()
-            kindChip.isVisible = false
-            return
-        }
-
-        // el botón "Formato" aparece siempre que se pueda descargar algo de la página
-        kindChip.isVisible = page.isDownloadable || page.canChooseVideos
-
-        if (page.isDownloadable) {
-            fab.text = getString(
-                when {
-                    page.kind == YoutubeUrls.Kind.PLAYLIST && page.isMix -> R.string.explore_download_mix
-                    page.kind == YoutubeUrls.Kind.PLAYLIST -> R.string.explore_download_playlist
-                    else -> R.string.explore_download
-                }
-            )
-            fab.show()
+        val url = currentUrl
+        val active = if (YoutubeUrls.isYoutubeUrl(url)) {
+            page.isDownloadable || page.canChooseVideos || page.kind == YoutubeUrls.Kind.POST
         } else {
-            fab.hide()
+            isHttp(url) && ExploreSections.siteFor(hostOf(url))?.watchOnly != true
+        }
+        downloadCorner.alpha = if (active) 1f else 0.45f
+    }
+
+    /** Todas las opciones de lo que se está viendo, en una hoja que sube desde abajo. */
+    private fun showActions() {
+        val wv = webView ?: return
+        val page = refreshPage()
+        val url = currentUrl
+        val host = hostOf(url)
+        val youtube = YoutubeUrls.isYoutubeHost(host)
+        val title = cleanPageTitle(wv.title.orEmpty()).ifBlank { host ?: url }
+        val kindName = { kind: DownloadKind -> getString(kind.labelRes) }
+
+        val actions = ArrayList<ExploreActionsSheet.Action>()
+        var subtitle: String? = null
+        var showFormat = false
+        var primaryLabel: ((DownloadKind) -> String)? = null
+        var primaryIcon = R.drawable.baseline_download_24
+        var onPrimary: (() -> Unit)? = null
+        var note: String? = null
+
+        if (youtube) {
+            val videoId = page.videoId
+            when (page.kind) {
+                YoutubeUrls.Kind.VIDEO -> {
+                    subtitle = getString(
+                        when {
+                            page.isShort -> R.string.actions_what_short
+                            page.isLive -> R.string.actions_what_live
+                            page.isMusic -> R.string.actions_what_song
+                            else -> R.string.actions_what_video
+                        }
+                    )
+                    showFormat = true
+                    primaryLabel = { kind -> getString(R.string.actions_primary_single, kindName(kind)) }
+                    onPrimary = { downloadVideo(YoutubeUrls.videoUrl(page) ?: url) }
+                }
+                YoutubeUrls.Kind.VIDEO_IN_LIST -> {
+                    subtitle = getString(R.string.actions_what_video_in_list) +
+                            if (page.isMix) " · " + getString(R.string.actions_what_mix) else ""
+                    showFormat = true
+                    primaryLabel = { kind -> getString(R.string.actions_primary_this_video, kindName(kind)) }
+                    onPrimary = { downloadVideo(YoutubeUrls.videoUrl(page) ?: url) }
+                    actions.add(ExploreActionsSheet.Action(R.drawable.baseline_format_list_numbered_24, listLabel(page)) {
+                        downloadList(page)
+                    })
+                }
+                YoutubeUrls.Kind.PLAYLIST -> {
+                    subtitle = getString(if (page.isMix) R.string.actions_what_mix else R.string.actions_what_playlist)
+                    showFormat = true
+                    primaryLabel = { kind ->
+                        getString(
+                            if (page.isMix) R.string.actions_primary_mix else R.string.actions_primary_playlist,
+                            kindName(kind)
+                        )
+                    }
+                    onPrimary = { downloadList(page) }
+                }
+                YoutubeUrls.Kind.CHANNEL -> {
+                    subtitle = getString(R.string.actions_what_channel)
+                    // el selector masivo usa el mismo formato
+                    showFormat = true
+                    primaryLabel = { getString(R.string.actions_primary_channel) }
+                    primaryIcon = R.drawable.ic_checklist
+                    onPrimary = { openBulkSelect(page) }
+                }
+                YoutubeUrls.Kind.CLIP -> {
+                    subtitle = getString(R.string.actions_what_clip)
+                    showFormat = true
+                    primaryLabel = { kind -> getString(R.string.actions_primary_clip, kindName(kind)) }
+                    onPrimary = { downloadVideo(page.directUrl ?: url) }
+                }
+                YoutubeUrls.Kind.ALBUM -> {
+                    subtitle = getString(R.string.actions_what_album)
+                    showFormat = true
+                    primaryLabel = { kind -> getString(R.string.actions_primary_album, kindName(kind)) }
+                    onPrimary = { downloadListUrl(page.directUrl ?: url, isMix = false) }
+                }
+                YoutubeUrls.Kind.POST -> {
+                    subtitle = getString(R.string.actions_what_post)
+                    primaryLabel = { getString(R.string.actions_primary_post) }
+                    primaryIcon = R.drawable.ic_image
+                    onPrimary = { savePageImages(limit = MAX_POST_IMAGES) }
+                    actions.add(ExploreActionsSheet.Action(R.drawable.ic_video, getString(R.string.actions_post_video)) {
+                        downloadPostVideo()
+                    })
+                }
+                YoutubeUrls.Kind.NONE -> note = getString(R.string.actions_note_nothing)
+            }
+
+            if (page.canChooseVideos && page.kind != YoutubeUrls.Kind.CHANNEL) {
+                actions.add(ExploreActionsSheet.Action(R.drawable.ic_checklist, getString(R.string.bulk_choose_from_list)) {
+                    openBulkSelect(page)
+                })
+            }
+            if (page.hasVideo && videoId != null) {
+                actions.add(
+                    ExploreActionsSheet.Action(
+                        R.drawable.ic_headphones,
+                        getString(R.string.music_listen_title),
+                        getString(R.string.actions_listen_sub)
+                    ) { listenVideo(videoId) }
+                )
+            }
+            if (page.hasList) {
+                actions.add(ExploreActionsSheet.Action(R.drawable.ic_headphones, getString(R.string.actions_listen_list)) {
+                    listenList(page, videoId)
+                })
+            }
+            if (page.hasVideo && videoId != null) {
+                actions.add(
+                    ExploreActionsSheet.Action(
+                        R.drawable.ic_comment,
+                        getString(R.string.actions_comments),
+                        getString(R.string.actions_comments_sub)
+                    ) { openComments(videoId, title) }
+                )
+                actions.add(ExploreActionsSheet.Action(R.drawable.ic_image, getString(R.string.actions_thumbnail)) {
+                    saveImages(listOf(YoutubeUrls.thumbnailUrls(videoId)), title)
+                })
+                actions.add(
+                    ExploreActionsSheet.Action(
+                        R.drawable.ic_open_in_new,
+                        getString(R.string.actions_open_youtube_app),
+                        getString(R.string.actions_open_youtube_app_sub)
+                    ) { openInYoutubeApp(YoutubeUrls.videoUrl(videoId)) }
+                )
+            }
+        } else {
+            val site = ExploreSections.siteFor(host)
+            subtitle = site?.name ?: host
+            when {
+                site?.watchOnly == true -> note = getString(R.string.actions_note_watch_only, site.name)
+                site?.images == true -> {
+                    primaryLabel = { getString(R.string.actions_primary_gif) }
+                    primaryIcon = R.drawable.ic_gif
+                    onPrimary = { savePageImages(limit = 1) }
+                    actions.add(ExploreActionsSheet.Action(R.drawable.baseline_share_24, getString(R.string.explore_share_image)) {
+                        sharePageImage()
+                    })
+                }
+                isHttp(url) -> {
+                    showFormat = true
+                    primaryLabel = { kind -> getString(R.string.actions_primary_page, kindName(kind)) }
+                    onPrimary = { downloadVideo(url) }
+                    note = getString(R.string.actions_note_page)
+                    actions.add(ExploreActionsSheet.Action(R.drawable.ic_image, getString(R.string.actions_page_images)) {
+                        savePageImages(limit = MAX_PAGE_IMAGES)
+                    })
+                }
+            }
         }
 
-        // "Elegir vídeos": canales, playlists y Mix (también al ver un vídeo que pertenece a una lista)
-        if (page.canChooseVideos) selectFab.show() else selectFab.hide()
+        if (isHttp(url)) {
+            actions.add(ExploreActionsSheet.Action(R.drawable.ic_copy, getString(R.string.explore_copy_link)) {
+                copyLink(url)
+            })
+            actions.add(ExploreActionsSheet.Action(R.drawable.baseline_share_24, getString(R.string.actions_share_link)) {
+                shareLink(url, title)
+            })
+            if (!youtube) {
+                actions.add(ExploreActionsSheet.Action(R.drawable.ic_arrow_outward, getString(R.string.explore_open_external)) {
+                    openInExternalBrowser(url)
+                })
+            }
+        }
 
-        // "Escuchar": solo el audio, en segundo plano (donde se puede descargar algo, se puede escuchar)
-        if (page.isDownloadable) listenFab.show() else listenFab.hide()
+        actionsSheet?.dismiss()
+        actionsSheet = ExploreActionsSheet.show(
+            requireContext(),
+            ExploreActionsSheet.Content(
+                title = title,
+                subtitle = subtitle,
+                showFormat = showFormat,
+                primaryLabel = primaryLabel,
+                primaryIcon = primaryIcon,
+                onPrimary = onPrimary,
+                note = note,
+                actions = actions
+            ),
+            DownloadKind.load(prefs)
+        ) { kind ->
+            DownloadKind.save(prefs, kind)
+            showKind()
+        }
     }
 
     /**
@@ -939,17 +1113,6 @@ class ExploreFragment : Fragment() {
         return parts.joinToString(" · ")
     }
 
-    private fun onFabClick() {
-        val page = currentPage
-        val videoId = page.videoId
-        when {
-            page.kind == YoutubeUrls.Kind.VIDEO && videoId != null -> downloadVideo(YoutubeUrls.videoUrl(videoId))
-            page.kind == YoutubeUrls.Kind.PLAYLIST -> downloadList(page)
-            page.kind == YoutubeUrls.Kind.VIDEO_IN_LIST -> askVideoOrList(page)
-            else -> toast(R.string.explore_not_downloadable)
-        }
-    }
-
     private fun listLabel(page: YoutubeUrls.Page): String {
         return if (page.isMix) {
             getString(R.string.explore_download_whole_mix, YoutubeUrls.MIX_LIMIT)
@@ -958,79 +1121,107 @@ class ExploreFragment : Fragment() {
         }
     }
 
-    private fun askVideoOrList(page: YoutubeUrls.Page) {
-        val videoId = page.videoId ?: return
-        val options = arrayOf(
-            getString(R.string.explore_download_only_video),
-            listLabel(page),
-            getString(R.string.bulk_choose_from_list)
-        )
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.explore_download_choose_title)
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> downloadVideo(YoutubeUrls.videoUrl(videoId))
-                    1 -> downloadList(page)
-                    else -> openBulkSelect(page)
-                }
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
+    // ------------------------------------------------------------------------------------------
+    // Pulsación larga: enlaces, miniaturas, imágenes, GIF y stickers
+    // ------------------------------------------------------------------------------------------
 
-    /** Pulsación larga sobre una miniatura o un enlace: descargar sin abrir el vídeo. */
     private fun onLongPress(wv: WebView): Boolean {
-        val type = wv.hitTestResult.type
-        if (type != WebView.HitTestResult.SRC_ANCHOR_TYPE &&
-            type != WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
-        ) {
-            return false
-        }
-        val handler = Handler(Looper.getMainLooper()) { message ->
-            if (isAdded && view != null) {
-                showLinkActions(message.data.getString("url"))
+        val result = wv.hitTestResult
+        return when (result.type) {
+            WebView.HitTestResult.IMAGE_TYPE -> {
+                val src = result.extra
+                if (!isSavableImage(src)) return false
+                showLinkActions(null, src)
+                true
             }
-            true
+            WebView.HitTestResult.SRC_ANCHOR_TYPE, WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                val imageFromHit = if (result.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) result.extra else null
+                val handler = Handler(Looper.getMainLooper()) { message ->
+                    if (isAdded && view != null) {
+                        val image = message.data.getString("src")?.takeIf { it.isNotBlank() } ?: imageFromHit
+                        showLinkActions(message.data.getString("url"), image)
+                    }
+                    true
+                }
+                wv.requestFocusNodeHref(handler.obtainMessage())
+                true
+            }
+            else -> false
         }
-        wv.requestFocusNodeHref(handler.obtainMessage())
-        return true
     }
 
-    private fun showLinkActions(href: String?) {
-        if (href.isNullOrBlank()) return
-        val page = YoutubeUrls.parse(href)
-        if (!page.isDownloadable && !page.canChooseVideos) return
-
+    private fun showLinkActions(href: String?, imageSrc: String?) {
         val labels = mutableListOf<String>()
         val actions = mutableListOf<() -> Unit>()
 
-        val videoId = page.videoId
-        if (videoId != null) {
-            labels.add(getString(R.string.explore_download_video))
-            actions.add { downloadVideo(YoutubeUrls.videoUrl(videoId)) }
-            labels.add(getString(R.string.music_listen_link))
-            actions.add { listenLink(videoId) }
+        if (!href.isNullOrBlank() && isHttp(href)) {
+            if (YoutubeUrls.isYoutubeUrl(href)) {
+                val page = YoutubeUrls.parse(href)
+                val videoId = page.videoId
+                if (videoId != null) {
+                    labels.add(getString(R.string.explore_download_video))
+                    actions.add { downloadVideo(YoutubeUrls.videoUrl(page) ?: YoutubeUrls.videoUrl(videoId)) }
+                    labels.add(getString(R.string.music_listen_link))
+                    actions.add { listenLink(videoId) }
+                }
+                if (page.kind == YoutubeUrls.Kind.CLIP && page.directUrl != null) {
+                    labels.add(getString(R.string.actions_primary_clip, getString(DownloadKind.load(prefs).labelRes)))
+                    actions.add { downloadVideo(page.directUrl) }
+                }
+                if (page.kind == YoutubeUrls.Kind.ALBUM && page.directUrl != null) {
+                    labels.add(getString(R.string.actions_primary_album, getString(DownloadKind.load(prefs).labelRes)))
+                    actions.add { downloadListUrl(page.directUrl, isMix = false) }
+                }
+                if (page.hasList) {
+                    labels.add(listLabel(page))
+                    actions.add { downloadList(page) }
+                }
+                if (page.canChooseVideos) {
+                    labels.add(
+                        getString(
+                            if (page.kind == YoutubeUrls.Kind.CHANNEL) R.string.bulk_choose_from_channel
+                            else R.string.bulk_choose_from_list
+                        )
+                    )
+                    actions.add { openBulkSelect(page) }
+                }
+            } else {
+                labels.add(getString(R.string.explore_download_link))
+                actions.add { downloadVideo(href) }
+            }
+            labels.add(getString(R.string.explore_copy_link))
+            actions.add { copyLink(href) }
         }
-        if (page.hasList) {
-            labels.add(listLabel(page))
-            actions.add { downloadList(page) }
-        }
-        if (page.canChooseVideos) {
-            labels.add(
-                getString(
-                    if (page.kind == YoutubeUrls.Kind.CHANNEL) R.string.bulk_choose_from_channel
-                    else R.string.bulk_choose_from_list
-                )
-            )
-            actions.add { openBulkSelect(page) }
-        }
-        labels.add(getString(R.string.explore_copy_link))
-        actions.add { copyLink(href) }
 
+        if (isSavableImage(imageSrc)) {
+            val image = imageSrc!!
+            val candidates = MediaSaver.candidatesFor(image)
+            labels.add(getString(R.string.explore_save_image))
+            actions.add { saveImages(listOf(candidates), null) }
+            labels.add(getString(R.string.explore_share_image))
+            actions.add { shareImage(candidates, null) }
+            if (isHttp(image)) {
+                labels.add(getString(R.string.explore_copy_image_link))
+                actions.add { copyLink(image) }
+            }
+        }
+
+        if (labels.isEmpty()) return
         MaterialAlertDialogBuilder(requireContext())
             .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
             .show()
     }
+
+    /** Una imagen de verdad: dirección web, o una imagen incrustada que no sea un marcador de 1 px. */
+    private fun isSavableImage(src: String?): Boolean {
+        if (src.isNullOrBlank()) return false
+        if (isHttp(src)) return true
+        return src.startsWith("data:image", ignoreCase = true) && src.length > MIN_DATA_IMAGE_LENGTH
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Descargas
+    // ------------------------------------------------------------------------------------------
 
     /**
      * Antes de descargar, si ya hay descargas esperando turno, pregunta en qué lugar de la cola poner esta
@@ -1065,7 +1256,7 @@ class ExploreFragment : Fragment() {
         val kind = DownloadKind.load(prefs)
         withFreshCookies {
             if (kind.isAudio) {
-                // el audio se eligió de forma explícita con el botón "Formato": se pone en cola ya, sin hoja de opciones
+                // el audio se eligió de forma explícita con el formato: se pone en cola ya, sin hoja de opciones
                 Toast.makeText(
                     requireContext(),
                     getString(R.string.kind_audio_started, url),
@@ -1112,12 +1303,17 @@ class ExploreFragment : Fragment() {
     /** Lee la playlist o el Mix completo y abre la hoja de descarga múltiple (o los pone en cola directamente). */
     private fun downloadList(page: YoutubeUrls.Page) {
         val listUrl = YoutubeUrls.listUrl(page) ?: return
-        if (fetchJob?.isActive == true) return
-        askQueuePosition { position -> readAndDownloadList(page, listUrl, position) }
+        downloadListUrl(listUrl, page.isMix)
     }
 
-    private fun readAndDownloadList(page: YoutubeUrls.Page, listUrl: String, position: Int) {
-        readList(page, listUrl, saveInDatabase = true) { items ->
+    /** Igual que [downloadList], para cualquier lista que entienda yt-dlp (también álbumes de YouTube Music). */
+    private fun downloadListUrl(listUrl: String, isMix: Boolean) {
+        if (fetchJob?.isActive == true) return
+        askQueuePosition { position -> readAndDownloadList(listUrl, isMix, position) }
+    }
+
+    private fun readAndDownloadList(listUrl: String, isMix: Boolean, position: Int) {
+        readList(listUrl, isMix, saveInDatabase = true) { items ->
             val ids = items.map { it.id }.filter { it != 0L }
             if (ids.isEmpty()) {
                 showListProblem(getString(R.string.explore_list_empty))
@@ -1146,13 +1342,13 @@ class ExploreFragment : Fragment() {
     }
 
     /**
-     * Lee la playlist o el Mix completos (con la ventana de progreso y el botón cancelar) y entrega los vídeos a
-     * [onItems]. Para descargar se guardan en la base de datos, porque hacen falta sus ids; para escuchar no se
-     * toca la base de datos.
+     * Lee la lista completa (con la ventana de progreso y el botón cancelar) y entrega los vídeos a [onItems].
+     * Para descargar se guardan en la base de datos, porque hacen falta sus ids; para escuchar no se toca la
+     * base de datos.
      */
     private fun readList(
-        page: YoutubeUrls.Page,
         listUrl: String,
+        isMix: Boolean,
         saveInDatabase: Boolean,
         onItems: suspend (List<ResultItem>) -> Unit
     ) {
@@ -1172,7 +1368,7 @@ class ExploreFragment : Fragment() {
                 }
                 try {
                     val items = withContext(Dispatchers.IO) {
-                        if (page.isMix) {
+                        if (isMix) {
                             // un Mix solo se lee bien con yt-dlp y con tope (no tiene final)
                             resultViewModel.repository.getYoutubeMix(
                                 listUrl,
@@ -1202,44 +1398,171 @@ class ExploreFragment : Fragment() {
     }
 
     // ------------------------------------------------------------------------------------------
+    // Imágenes, GIF y stickers: guardar y enviar
+    // ------------------------------------------------------------------------------------------
+
+    /** Guarda imágenes (cada una con sus direcciones candidatas) en Imágenes/Neon Downloader. */
+    private fun saveImages(items: List<List<String>>, baseName: String?) {
+        if (items.isEmpty()) {
+            toast(R.string.media_none_found)
+            return
+        }
+        toast(R.string.media_saving)
+        val app = requireContext().applicationContext
+        val referer = currentUrl
+        requireActivity().lifecycleScope.launch {
+            val result = MediaSaver.save(app, items, referer, baseName)
+            val folder = result.folder.orEmpty()
+            val message = when {
+                result.saved == 0 -> app.getString(R.string.media_save_failed)
+                result.failed > 0 -> app.getString(R.string.media_saved_partial, result.saved, result.failed)
+                result.saved == 1 -> app.getString(R.string.media_saved, folder)
+                else -> app.getString(R.string.media_saved_many, result.saved, folder)
+            }
+            Toast.makeText(app, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Envía una imagen, un GIF o un sticker a otra app (WhatsApp, Telegram...) con el menú de compartir. */
+    private fun shareImage(candidates: List<String>, baseName: String?) {
+        toast(R.string.media_sharing)
+        val activity = requireActivity()
+        val referer = currentUrl
+        activity.lifecycleScope.launch {
+            val intent = MediaSaver.shareIntent(activity, candidates, referer, baseName)
+            if (intent == null) {
+                Toast.makeText(activity, R.string.media_save_failed, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            runCatching { activity.startActivity(intent) }
+        }
+    }
+
+    /** Las imágenes grandes de la página (en una publicación de YouTube, solo las de la publicación). */
+    private fun savePageImages(limit: Int) {
+        readPageMedia { media ->
+            val images = media.images.take(limit)
+            if (images.isEmpty()) {
+                toast(R.string.media_none_found)
+            } else {
+                saveImages(images.map { MediaSaver.candidatesFor(it) }, cleanPageTitle(media.title))
+            }
+        }
+    }
+
+    private fun sharePageImage() {
+        readPageMedia { media ->
+            val first = media.images.firstOrNull()
+            if (first == null) {
+                toast(R.string.media_none_found)
+            } else {
+                shareImage(MediaSaver.candidatesFor(first), cleanPageTitle(media.title))
+            }
+        }
+    }
+
+    /** Una publicación que comparte un vídeo: se descarga ese vídeo. */
+    private fun downloadPostVideo() {
+        readPageMedia { media ->
+            val link = media.video
+            if (link.isNullOrBlank()) {
+                toast(R.string.post_no_video)
+                return@readPageMedia
+            }
+            val page = YoutubeUrls.parse(link)
+            downloadVideo(YoutubeUrls.videoUrl(page) ?: link)
+        }
+    }
+
+    private class PageMedia(val title: String, val images: List<String>, val video: String?)
+
+    private fun readPageMedia(onRead: (PageMedia) -> Unit) {
+        val wv = webView ?: return
+        wv.evaluateJavascript(PAGE_MEDIA_SCRIPT) { raw ->
+            if (!isAdded || view == null) return@evaluateJavascript
+            val media = runCatching {
+                val json = JSONObject(raw)
+                val list = json.optJSONArray("i")
+                val images = ArrayList<String>()
+                if (list != null) {
+                    for (i in 0 until list.length()) {
+                        list.optString(i).takeIf { it.isNotBlank() }?.let { images.add(it) }
+                    }
+                }
+                PageMedia(json.optString("t"), images, json.optString("v").takeIf { it.isNotBlank() })
+            }.getOrNull() ?: PageMedia("", emptyList(), null)
+            onRead(media)
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Comentarios con GIF y stickers
+    // ------------------------------------------------------------------------------------------
+
+    private fun openComments(videoId: String, title: String?) {
+        commentsViewer?.dismiss()
+        val viewer = CommentsViewer(
+            context = requireContext(),
+            videoId = videoId,
+            videoTitle = title,
+            onOpenInExplore = { url -> if (view != null) load(url) },
+            onFileChooser = { callback, params -> openFileChooser(callback, params) }
+        )
+        commentsViewer = viewer
+        viewer.show()
+    }
+
+    /** La app oficial de YouTube: la única que deja comentar con GIF o stickers. */
+    private fun openInYoutubeApp(url: String) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(CommentsViewer.YOUTUBE_PACKAGE)
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            toast(R.string.youtube_app_missing)
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Subir archivos desde la página
+    // ------------------------------------------------------------------------------------------
+
+    private fun openFileChooser(
+        callback: ValueCallback<Array<Uri>>,
+        params: WebChromeClient.FileChooserParams
+    ): Boolean {
+        fileCallback?.onReceiveValue(null)
+        fileCallback = callback
+        val intent = runCatching { params.createIntent() }.getOrNull()
+            ?: Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+        if (params.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) {
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        return try {
+            fileLauncher.launch(intent)
+            true
+        } catch (e: Exception) {
+            // sin selector de archivos: que el WebView lo dé por cancelado
+            fileCallback = null
+            false
+        }
+    }
+
+    private fun chosenFiles(resultCode: Int, data: Intent?): Array<Uri>? {
+        if (resultCode != Activity.RESULT_OK || data == null) return null
+        val clip = data.clipData
+        if (clip != null && clip.itemCount > 0) {
+            return Array(clip.itemCount) { clip.getItemAt(it).uri }
+        }
+        data.data?.let { return arrayOf(it) }
+        return WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+    }
+
+    // ------------------------------------------------------------------------------------------
     // Escuchar solo el audio (en segundo plano)
     // ------------------------------------------------------------------------------------------
 
     /** Lo que se sabe de la página en el momento de pasar al audio: título, canal y segundo en el que iba el vídeo. */
     private class PageSnapshot(val title: String, val author: String, val positionMs: Long)
-
-    /**
-     * Botón "Escuchar": solo el audio del vídeo, la playlist o el Mix que se está viendo. El vídeo de la página se
-     * pausa y el audio sigue desde el mismo segundo, en un reproductor propio que no se corta al apagar la pantalla.
-     */
-    private fun onListenClick() {
-        val page = currentPage
-        val videoId = page.videoId
-        when {
-            page.kind == YoutubeUrls.Kind.VIDEO && videoId != null -> listenVideo(videoId)
-            page.kind == YoutubeUrls.Kind.PLAYLIST -> listenList(page, null)
-            page.kind == YoutubeUrls.Kind.VIDEO_IN_LIST && videoId != null -> askListenVideoOrList(page, videoId)
-            else -> toast(R.string.explore_not_downloadable)
-        }
-    }
-
-    private fun askListenVideoOrList(page: YoutubeUrls.Page, videoId: String) {
-        val options = arrayOf(
-            getString(R.string.music_this_video),
-            if (page.isMix) {
-                getString(R.string.music_whole_mix, YoutubeUrls.MIX_LIMIT)
-            } else {
-                getString(R.string.music_whole_list)
-            }
-        )
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.music_listen_title)
-            .setItems(options) { _, which ->
-                if (which == 0) listenVideo(videoId) else listenList(page, videoId)
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
 
     /** Si ya suena algo, pregunta si lo nuevo va ahora, a continuación o al final de la cola; si no, empieza directamente. */
     private fun chooseListenMode(onChosen: (ExplorePlayer.Mode) -> Unit) {
@@ -1261,7 +1584,7 @@ class ExploreFragment : Fragment() {
             .show()
     }
 
-    /** El vídeo que se está viendo, solo en audio. */
+    /** El vídeo que se está viendo, solo en audio: sigue desde el mismo segundo y con la pantalla apagada. */
     private fun listenVideo(videoId: String) {
         chooseListenMode { mode ->
             withFreshCookies {
@@ -1278,7 +1601,7 @@ class ExploreFragment : Fragment() {
         val listUrl = YoutubeUrls.listUrl(page) ?: return
         if (fetchJob?.isActive == true) return
         chooseListenMode { mode ->
-            readList(page, listUrl, saveInDatabase = false) { results ->
+            readList(listUrl, page.isMix, saveInDatabase = false) { results ->
                 val items = results.mapNotNull { ExplorePlayer.mediaItem(it) }
                 if (items.isEmpty()) {
                     showListProblem(getString(R.string.explore_list_empty))
@@ -1395,10 +1718,30 @@ class ExploreFragment : Fragment() {
     // Utilidades
     // ------------------------------------------------------------------------------------------
 
+    /** Dirección de lo que se ve ahora (ver [refreshPage]). */
+    private fun refreshUrl(): String {
+        refreshPage()
+        return currentUrl
+    }
+
+    private fun hostOf(url: String?): String? =
+        runCatching { Uri.parse(url).host }.getOrNull()?.lowercase(Locale.ROOT)
+
+    private fun isHttp(url: String?): Boolean =
+        url != null && (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true))
+
     private fun copyLink(url: String) {
         val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("url", url))
         toast(R.string.explore_link_copied)
+    }
+
+    private fun shareLink(url: String, title: String?) {
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, url)
+        if (!title.isNullOrBlank()) send.putExtra(Intent.EXTRA_SUBJECT, title)
+        runCatching { startActivity(Intent.createChooser(send, null)) }
     }
 
     private fun toast(resId: Int) {
@@ -1416,7 +1759,6 @@ class ExploreFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         webView?.onResume()
-        updateAccountUi()
     }
 
     override fun onPause() {
@@ -1431,6 +1773,14 @@ class ExploreFragment : Fragment() {
         fetchJob = null
         progressDialog?.dismiss()
         progressDialog = null
+        actionsSheet?.dismiss()
+        actionsSheet = null
+        sectionsSheet?.dismiss()
+        sectionsSheet = null
+        commentsViewer?.dismiss()
+        commentsViewer = null
+        fileCallback?.onReceiveValue(null)
+        fileCallback = null
         exitFullscreen()
         webView?.let { wv ->
             adBlockScript = null
@@ -1457,6 +1807,13 @@ class ExploreFragment : Fragment() {
         private const val PREF_ACCOUNT_PROMPTED = "explore_account_prompted"
         private const val COOKIE_DESCRIPTION = "Explorar (cuenta de Google)"
 
+        /** Máximo de imágenes que se guardan de una publicación o de una página. */
+        private const val MAX_POST_IMAGES = 20
+        private const val MAX_PAGE_IMAGES = 10
+
+        /** Las imágenes incrustadas más cortas que esto son marcadores vacíos (miniaturas que aún no cargan). */
+        private const val MIN_DATA_IMAGE_LENGTH = 2000
+
         /** Pausa los vídeos de la página y devuelve { t: título de la pestaña, a: canal, p: segundo en el que iba }. */
         private const val PAUSE_PAGE_SCRIPT = """
             (function () {
@@ -1474,6 +1831,58 @@ class ExploreFragment : Fragment() {
                     a: author,
                     p: (typeof position === 'number' && isFinite(position)) ? position : -1
                 };
+            })()
+        """
+
+        /**
+         * Imágenes de la página, de la más grande a la más pequeña, sin avatares ni iconos: { t: título,
+         * i: [direcciones], v: vídeo compartido en una publicación de YouTube }. En YouTube solo se mira dentro
+         * de la publicación si se encuentra; en otras webs se añaden og:image / og:video (Tenor, GIPHY...).
+         */
+        private const val PAGE_MEDIA_SCRIPT = """
+            (function () {
+                function abs(u) { try { return new URL(u, location.href).href; } catch (e) { return ''; } }
+                var yt = /(^|\.)youtube\.com$/.test(location.hostname);
+                var seen = {}, out = [];
+                function add(u) {
+                    u = abs(u || '');
+                    if (!u || seen[u] || !/^https?:/i.test(u)) { return; }
+                    seen[u] = 1; out.push(u);
+                }
+                var scope = document;
+                if (yt) {
+                    var post = document.querySelector('ytm-backstage-post-thread-renderer, ytm-backstage-post-renderer, ytm-post-renderer, ytd-backstage-post-thread-renderer, ytd-backstage-post-renderer, ytd-post-renderer, [class*="backstage-post"], [class*="post-renderer"]');
+                    if (post) { scope = post; }
+                }
+                var found = [];
+                var imgs = scope.querySelectorAll('img');
+                for (var i = 0; i < imgs.length; i++) {
+                    var img = imgs[i];
+                    var src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
+                    if (!src || /^data:/i.test(src)) { continue; }
+                    var r = img.getBoundingClientRect();
+                    var area = Math.max((img.naturalWidth || 0) * (img.naturalHeight || 0), r.width * r.height);
+                    if (area < 140 * 140) { continue; }
+                    found.push({ u: src, a: area });
+                }
+                found.sort(function (x, y) { return y.a - x.a; });
+                for (var j = 0; j < found.length; j++) { add(found[j].u); }
+                if (!yt) {
+                    var metas = ['meta[property="og:image"]', 'meta[property="og:image:secure_url"]', 'meta[name="twitter:image"]',
+                                 'meta[property="og:video"]', 'meta[property="og:video:secure_url"]'];
+                    for (var k = 0; k < metas.length; k++) {
+                        var m = document.querySelector(metas[k]);
+                        if (m && m.content) { add(m.content); }
+                    }
+                    var vids = scope.querySelectorAll('video[src], video source[src]');
+                    for (var n = 0; n < vids.length && n < 5; n++) { add(vids[n].getAttribute('src')); }
+                }
+                var video = '';
+                if (yt) {
+                    var a = scope.querySelector('a[href*="/watch?v="], a[href*="/shorts/"], a[href*="youtu.be/"]');
+                    if (a) { video = abs(a.getAttribute('href')); }
+                }
+                return { t: document.title || '', i: out.slice(0, 30), v: video };
             })()
         """
     }

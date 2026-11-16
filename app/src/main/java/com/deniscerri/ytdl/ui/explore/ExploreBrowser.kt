@@ -12,10 +12,14 @@ import androidx.webkit.WebViewFeature
  */
 object ExploreBrowser {
 
-    const val DESKTOP_PLATFORM = "Linux"
+    private const val DESKTOP_PLATFORM = "Linux"
+    private const val ANDROID_PLATFORM = "Android"
+
+    private fun defaultUserAgent(context: Context): String =
+        runCatching { WebSettings.getDefaultUserAgent(context) }.getOrDefault("")
 
     fun userAgent(context: Context, desktop: Boolean): String {
-        val default = runCatching { WebSettings.getDefaultUserAgent(context) }.getOrDefault("")
+        val default = defaultUserAgent(context)
         val chrome = Regex("Chrome/([0-9.]+)").find(default)?.groupValues?.get(1) ?: "138.0.0.0"
         return if (desktop || default.isBlank()) {
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chrome Safari/537.36"
@@ -27,10 +31,10 @@ object ExploreBrowser {
 
     /**
      * Google rechaza el inicio de sesión cuando detecta un WebView incrustado. Se quitan las dos pistas
-     * más claras: la cabecera X-Requested-With y la marca "Android WebView" de los client hints. En modo
-     * escritorio los client hints dicen además que es un ordenador, igual que el user agent.
+     * más claras: la cabecera X-Requested-With y la marca "Android WebView" de los client hints. Además los
+     * client hints dicen lo mismo que el user agent: ordenador en modo escritorio, Android en modo normal.
      */
-    fun hideWebViewIdentity(settings: WebSettings, desktop: Boolean) {
+    fun hideWebViewIdentity(context: Context, settings: WebSettings, desktop: Boolean) {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
             runCatching {
                 WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
@@ -49,6 +53,10 @@ object ExploreBrowser {
                 val builder = UserAgentMetadata.Builder(current).setBrandVersionList(brands)
                 if (desktop) {
                     builder.setMobile(false).setPlatform(DESKTOP_PLATFORM)
+                } else {
+                    // teléfono: "Mobile" en el user agent; tableta: sin él (igual que Chrome)
+                    builder.setMobile(defaultUserAgent(context).contains(" Mobile"))
+                        .setPlatform(ANDROID_PLATFORM)
                 }
                 WebSettingsCompat.setUserAgentMetadata(settings, builder.build())
             }

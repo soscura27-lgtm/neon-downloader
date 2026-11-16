@@ -48,6 +48,25 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
   adelantado la de la pista siguiente. Si YouTube rechaza una dirección se reintenta una vez con otra
   nueva y, si la pista falla, se pasa a la siguiente. Permisos nuevos: `FOREGROUND_SERVICE_MEDIA_PLAYBACK`
   y `WAKE_LOCK`.
+- **Botón de la esquina** (`fragment_explore.xml`, `ExploreActionsSheet.kt`, `sheet_explore_actions.xml`): los
+  botones flotantes (Formato / Elegir vídeos / Escuchar / Descargar) tapaban los controles de YouTube en Shorts y
+  vídeos; ahora hay un único botón en la barra superior con el formato debajo, que abre una hoja con todas las
+  opciones de lo que se está viendo. La página se lee en el momento (`WebView.url`), así funciona al deslizar Shorts.
+- **Todo tipo de contenido** (`YoutubeUrls.kt`): clips, publicaciones (imágenes/GIF y vídeo compartido),
+  canciones y álbumes de YouTube Music, Shorts y directos; cualquier otra web pasa a yt-dlp. Pulsación larga
+  sobre imágenes, GIF y stickers para guardarlos o compartirlos (`MediaSaver.kt`: OkHttp + MediaStore +
+  FileProvider, tipo detectado por los primeros bytes; miniaturas de YouTube en máxima resolución).
+- **Apartados** (`ExploreSections.kt`, `sheet_explore_sections.xml`): secciones de YouTube, películas y series
+  gratis y legales (YouTube Películas y TV, Pluto TV, Tubi, Plex, ViX, FilminLatino, Internet Archive), apps de
+  streaming instaladas (`<queries>` en el manifiesto) y GIF/stickers (Tenor, GIPHY). Explorar pasa a navegar
+  por cualquier web (los enlaces de salida de YouTube siguen abriéndose fuera); se concede el permiso de
+  contenido protegido (DRM, Widevine) para poder ver esos servicios.
+- **Comentarios con GIF y stickers** (`CommentsViewer.kt`, `res/raw/explore_comments.js`): YouTube añadió GIF e
+  imágenes a los comentarios (oct.-nov. 2026) pero su web móvil no los muestra; el visor abre el vídeo en la web
+  de escritorio dejando solo los comentarios, con la misma sesión, el reproductor oculto y callado. Publicar GIF
+  solo lo acepta la app oficial: acceso directo a ella.
+- **Subida de archivos** (`onShowFileChooser`) en Explorar y en el visor de comentarios, e identidad de Chrome
+  compartida (`ExploreBrowser.kt`; en modo escritorio los client hints también dicen escritorio).
 - Icono de cohete y planeta (vector adaptable, monocromo y PNG heredados).
 
 ## Proyecto

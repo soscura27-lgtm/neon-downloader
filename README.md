@@ -12,14 +12,30 @@ cian y naranja neón, tipografía Orbitron y fondo espacial). Está basada en
   velocidad y tamaño de búfer.
 - Valores por defecto: calidad "mejor", 4 hilos por descarga y 2 descargas simultáneas.
 - **Explorar**: pestaña con YouTube dentro de la app (buscador, suscripciones, biblioteca y, si
-  quieres, tu cuenta de Google) con un botón de descarga siempre a mano.
+  quieres, tu cuenta de Google). Todas las opciones de descarga están en **un solo botón en la esquina
+  de la barra superior** (con el formato debajo: VÍDEO, MP3 o AUDIO): nada flota encima de los Shorts
+  ni de los vídeos.
+- **Apartados** (botón de cuadritos): Inicio, Shorts, Suscripciones, Biblioteca, Historial, Ver más
+  tarde, Me gusta, YouTube Music y **películas y series gratis y legales** dentro de la app: Películas y TV
+  de YouTube, Pluto TV, Tubi, Plex, ViX, FilminLatino y cine y series clásicas de Internet Archive.
+  También abre tus apps de streaming instaladas (Netflix, Disney+, Prime Video, Max, Crunchyroll...).
+  Las webs con DRM se pueden ver; las que no lo tienen (Pluto TV, Tubi, Archive) también se descargan.
+- **Descarga de todo tipo de contenido**: vídeos, Shorts, directos, clips, playlists, Mix, canales,
+  canciones y álbumes de YouTube Music, publicaciones (sus imágenes y GIF, o el vídeo que comparten),
+  miniaturas y cualquier web que entienda yt-dlp. Manteniendo pulsada cualquier imagen, GIF o sticker
+  se puede guardar o **enviar** a WhatsApp, Telegram, etc.
+- **Comentarios con GIF y stickers**: los que la web móvil de YouTube no muestra se ven en un visor
+  propio (con tu sesión: puedes dar me gusta y responder). Enviar un GIF a un comentario solo lo acepta
+  la app oficial de YouTube, así que hay un acceso directo a ella. Apartado de **GIF y stickers**
+  (Tenor y GIPHY) para guardarlos o enviarlos, y subida de fotos/GIF desde el teléfono en las páginas que
+  lo permiten.
 - **Bloqueador de anuncios** propio en Explorar (peticiones de publicidad, anuncios en pantalla y
   salto de los anuncios del reproductor). Se activa y desactiva desde el menú ⋮.
 - Descarga de **playlist o Mix completos** con un toque.
 - **Selector masivo** para un canal (Vídeos / Shorts / Directos), una playlist o un Mix: buscar,
   filtrar por duración, fecha o "no descargados", ordenar y elegir todo, los primeros N, un rango
   ("del 20 al 80") o vídeo por vídeo.
-- **Formato** a elegir en Explorar y en el selector: Vídeo, **Audio MP3** o audio original.
+- **Formato** a elegir en la hoja del botón de la esquina y en el selector: Vídeo, **Audio MP3** o audio original.
 - **Nivel de descarga**: porcentaje global en Explorar y porcentaje en cada descarga activa.
 - **Escuchar** en Explorar: solo el audio del vídeo, la playlist o el Mix que estés viendo, sin vídeo y en
   segundo plano (sigue sonando con la pantalla apagada, con notificación y controles). Se puede añadir

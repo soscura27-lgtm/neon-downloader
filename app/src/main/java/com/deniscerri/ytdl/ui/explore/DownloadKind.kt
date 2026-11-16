@@ -19,11 +19,16 @@ enum class DownloadKind(
     val container: String?,
     val labelRes: Int,
     val optionRes: Int,
-    val iconRes: Int
+    val iconRes: Int,
+    /** Texto corto bajo el icono del botón de la esquina: "VÍDEO", "MP3", "AUDIO". */
+    val shortLabelRes: Int
 ) {
-    VIDEO("video", DownloadType.video, null, R.string.kind_video, R.string.kind_video_option, R.drawable.ic_video),
-    AUDIO_MP3("mp3", DownloadType.audio, "mp3", R.string.kind_mp3, R.string.kind_mp3_option, R.drawable.ic_music),
-    AUDIO_ORIGINAL("audio", DownloadType.audio, "", R.string.kind_audio, R.string.kind_audio_option, R.drawable.ic_music);
+    VIDEO("video", DownloadType.video, null, R.string.kind_video, R.string.kind_video_option, R.drawable.ic_video,
+        R.string.kind_short_video),
+    AUDIO_MP3("mp3", DownloadType.audio, "mp3", R.string.kind_mp3, R.string.kind_mp3_option, R.drawable.ic_music,
+        R.string.kind_short_mp3),
+    AUDIO_ORIGINAL("audio", DownloadType.audio, "", R.string.kind_audio, R.string.kind_audio_option, R.drawable.ic_music,
+        R.string.kind_short_audio);
 
     val isAudio: Boolean
         get() = type == DownloadType.audio

@@ -37,6 +37,21 @@
         <package android:name="com.deniscerri.ytdl.deno" />
         <package android:name="com.deniscerri.ytdl.aria2c" />
 
+        <!-- Explorar → Apartados: apps de streaming instaladas y la app de YouTube (comentar con GIF) -->
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.disney.disneyplus" />
+        <package android:name="com.amazon.avod.thirdpartyclient" />
+        <package android:name="com.wbd.stream" />
+        <package android:name="com.hbo.hbonow" />
+        <package android:name="com.crunchyroll.crunchyroid" />
+        <package android:name="com.cbs.ott" />
+        <package android:name="com.cbs.app" />
+        <package android:name="com.univision.prendetv" />
+        <package android:name="tv.pluto.android" />
+        <package android:name="com.tubitv" />
+        <package android:name="com.plexapp.android" />
+
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="application/vnd.android.package-archive" />

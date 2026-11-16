@@ -81,4 +81,19 @@
         <item name="android:textSize">0sp</item>
     </style>
 
+    <!--
+      Ventana a pantalla completa por encima del tema de la actividad (conserva sus colores):
+      visor de comentarios con GIF de Explorar.
+    -->
+    <style name="ThemeOverlay.App.FullScreenDialog" parent="">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="android:windowBackground">?attr/colorSurface</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+
 </resources>

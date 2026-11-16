@@ -19,17 +19,45 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENCRYPTED="$ROOT/scripts/ci/neon-signing.env.enc"
 
+# Errores típicos al pegar el secreto desde el celular: espacios o saltos de línea, comillas alrededor,
+# o la línea entera "NEON_FIRMA=contraseña". Se limpian antes de usarlo.
+normalize_firma() {
+  local value="$1" quote
+  value="${value//$'\r'/}"
+  value="${value//$'\n'/}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  for quote in '"' "'" '`'; do
+    if (( ${#value} >= 2 )) && [[ "${value:0:1}" == "$quote" && "${value: -1}" == "$quote" ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+  done
+  if [[ "$value" =~ ^[Nn][Ee][Oo][Nn]_[Ff][Ii][Rr][Mm][Aa][[:space:]]*[:=][[:space:]]*(.+)$ ]]; then
+    value="${BASH_REMATCH[1]}"
+  fi
+  printf '%s' "$value"
+}
+
 # 1) Clave cifrada del repositorio + contraseña NEON_FIRMA
 if [[ -z "${NEON_KEYSTORE_B64:-}" && -n "${NEON_FIRMA:-}" ]]; then
   if [[ ! -f "$ENCRYPTED" ]]; then
     echo "ERROR: hay NEON_FIRMA pero falta $ENCRYPTED." >&2
     exit 1
   fi
+  NEON_FIRMA="$(normalize_firma "$NEON_FIRMA")"
+  export NEON_FIRMA
   plain="$(mktemp)"
   trap 'rm -f "$plain"' EXIT
   if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 \
       -in "$ENCRYPTED" -out "$plain" -pass env:NEON_FIRMA 2>/dev/null; then
-    echo "ERROR: NEON_FIRMA no es la contraseña de la clave cifrada (revisa el secreto en GitHub)." >&2
+    lowered="$(printf '%s' "$NEON_FIRMA" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$lowered" == "neon_firma" ]]; then
+      echo "ERROR: el secreto de firma tiene como valor su propio nombre." >&2
+    else
+      echo "ERROR: el secreto de firma no abre la clave cifrada (tiene ${#NEON_FIRMA} caracteres; la contraseña correcta tiene 32 letras y números)." >&2
+    fi
+    echo "       Corrígelo en GitHub: Settings → Secrets and variables → Actions → el secreto de firma → Update," >&2
+    echo "       y pega en Value solo la contraseña." >&2
     exit 1
   fi
   # Solo se leen las variables conocidas; el contenido nunca se ejecuta.
