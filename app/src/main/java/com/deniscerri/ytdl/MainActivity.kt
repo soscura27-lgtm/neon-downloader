@@ -49,6 +49,7 @@ import com.deniscerri.ytdl.ui.downloads.DownloadQueueMainFragment
 import com.deniscerri.ytdl.ui.downloads.HistoryFragment
 import com.deniscerri.ytdl.ui.explore.ExploreFragment
 import com.deniscerri.ytdl.ui.more.settings.SettingsActivity
+import com.deniscerri.ytdl.ui.more.NeonUpdates
 import com.deniscerri.ytdl.ui.welcome.WelcomeActivity
 import com.deniscerri.ytdl.util.ApkInstallUtil
 import com.deniscerri.ytdl.util.BgUtilsPoTokenGeneratorUtil
@@ -309,6 +310,9 @@ class MainActivity : BaseActivity() {
         handleIntents(intent)
 
         callAutoUpdates(firstRun = intent.getBooleanExtra(WelcomeActivity.EXTRA_FROM_WELCOME, false))
+
+        // tras instalar otra compilación: "¡Actualizada!" con lo nuevo (así se ve que se actualizó bien)
+        if (savedInstanceState == null) NeonUpdates.showIfUpdated(this)
     }
     override fun onSaveInstanceState(savedInstanceState: Bundle) {
         super.onSaveInstanceState(savedInstanceState)

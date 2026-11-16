@@ -149,6 +149,22 @@
                 android:paddingHorizontal="15dp"
                 app:drawableStartCompat="@drawable/ic_power" />
 
+            <!-- Versión y novedades: compilación instalada y lista de cambios -->
+            <TextView
+                android:id="@+id/neon_updates"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:drawablePadding="35dp"
+                android:textSize="16sp"
+                android:paddingVertical="15dp"
+                android:text="@string/neon_updates_title"
+                android:textStyle="bold"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?android:attr/selectableItemBackground"
+                android:paddingHorizontal="15dp"
+                app:drawableStartCompat="@drawable/ic_update" />
+
 
             <View
                 android:layout_margin="0dp"

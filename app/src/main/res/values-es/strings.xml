@@ -923,5 +923,28 @@
     <string name="explore_background_playing">Sonando en Explorar</string>
     <string name="explore_background_pause">Pausa</string>
     <string name="explore_background_resume">Reproducir</string>
+    <string name="explore_background_previous">Anterior</string>
+    <string name="explore_background_next">Siguiente</string>
     <string name="explore_background_close">Cerrar</string>
+
+    <!-- Versión y novedades -->
+    <string name="neon_updates_title">Versión y novedades</string>
+    <string name="neon_updates_updated">¡Actualizada!</string>
+    <string name="neon_updates_installed">La compilación #%1$d se instaló correctamente.</string>
+    <string name="neon_updates_installed_local">La versión nueva se instaló correctamente.</string>
+    <string name="neon_updates_version">Neon Downloader %1$s</string>
+    <string name="neon_updates_build">Compilación #%1$d · %2$s</string>
+    <string name="neon_updates_build_local">Compilación local · %1$s</string>
+    <string name="neon_updates_commit">Cambio %1$s · rama %2$s</string>
+    <string name="neon_updates_check">Buscar actualización</string>
+    <string name="neon_updates_checking">Consultando GitHub…</string>
+    <string name="neon_updates_latest">Tienes la última compilación (#%1$d).</string>
+    <string name="neon_updates_available">Hay una compilación nueva: #%1$d (%2$s)</string>
+    <string name="neon_updates_download">Descargar</string>
+    <string name="neon_updates_failed">No se pudo comprobar: %1$s</string>
+    <string name="neon_updates_unknown">Todavía no hay ninguna compilación publicada.</string>
+    <string name="neon_updates_changes">Novedades</string>
+    <string name="neon_updates_new_count">Nuevo desde tu versión anterior: %1$d</string>
+    <string name="neon_updates_new_badge">NUEVO</string>
+    <string name="neon_updates_empty">El historial de cambios llega con las compilaciones de GitHub.</string>
 </resources>

@@ -79,6 +79,15 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
   Como en Brave: `ExploreWebView` no le cuenta al motor que la ventana se ocultó (Chromium pausa en Android los
   vídeos de una página oculta), la notificación aparece en cuanto algo suena (el servicio ya está en marcha al
   salir) y reproducir desde la notificación despierta la página aunque la app esté fuera.
+- **Anterior / siguiente** en la notificación de segundo plano, la pantalla de bloqueo y los audífonos
+  (`ExploreMediaService`, `explore_background.js`): API del reproductor de YouTube (`nextVideo`/`previousVideo`),
+  sus botones, la lista del Mix o playlist y, en Shorts, desplazar la lista vertical.
+- **Versión y novedades** (`ui/more/NeonUpdates.kt`, `sheet_neon_updates.xml`): `app/build.gradle` mete en BuildConfig
+  el número de compilación de GitHub Actions, el commit, la rama y la fecha; la versión pasa a ser
+  `1.9.1.1.<compilación>` y el versionCode sube con cada compilación. `scripts/ci/changelog.py` genera desde git el
+  historial (`assets/neon_changelog.json`, no se sube al repositorio). Aviso "¡Actualizada!" al abrir una compilación
+  distinta (`MainActivity`), fila en Más, opción en el menú de Explorar y comprobación de la última compilación
+  publicada (las notas de cada Release llevan `neon-build:N`).
 - Icono de cohete y planeta (vector adaptable, monocromo y PNG heredados).
 
 ## Proyecto

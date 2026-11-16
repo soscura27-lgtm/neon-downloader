@@ -51,6 +51,9 @@ jobs:
     steps:
       - name: Descargar el código
         uses: actions/checkout@v4
+        with:
+          # historial completo: la app enseña los cambios en "Versión y novedades"
+          fetch-depth: 0
 
       - name: Java 17
         uses: actions/setup-java@v4

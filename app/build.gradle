@@ -30,6 +30,21 @@ if (isBeta) {
     versionExt += "-beta"
 }
 
+// Compilación de Neon Downloader (panel "Versión y novedades"): número de la ejecución de GitHub Actions,
+// commit, rama y momento de la compilación. En una compilación local el número es 0.
+def neonBuild = (System.getenv("GITHUB_RUN_NUMBER") ?: "0").toInteger()
+def neonCommit = (System.getenv("GITHUB_SHA") ?: "").take(7)
+if (neonCommit.isEmpty()) {
+    try {
+        neonCommit = providers.exec { commandLine "git", "rev-parse", "--short=7", "HEAD" }
+            .standardOutput.asText.get().trim()
+    } catch (ignored) {
+        neonCommit = "local"
+    }
+}
+def neonBranch = System.getenv("GITHUB_REF_NAME") ?: "local"
+def neonBuildTime = System.currentTimeMillis()
+
 android {
     namespace 'com.deniscerri.ytdl'
     compileSdk = 36
@@ -55,7 +70,13 @@ android {
         minSdk 24
         targetSdk 36
         versionCode versionMajor * 1000000 + versionMinor * 10000 + versionPatch * 100 + versionBuild
-        versionName "${versionMajor}.${versionMinor}.${versionPatch}${versionExt}"
+        // el número de compilación va al final: 1.9.1.1.12 = versión 1.9.1.1, compilación 12
+        versionName("${versionMajor}.${versionMinor}.${versionPatch}${versionExt}" + (neonBuild > 0 ? ".${neonBuild}" : ""))
+        buildConfigField "int", "NEON_BUILD", "${neonBuild}"
+        buildConfigField "String", "NEON_COMMIT", "\"${neonCommit}\""
+        buildConfigField "String", "NEON_BRANCH", "\"${neonBranch}\""
+        buildConfigField "long", "NEON_BUILD_TIME", "${neonBuildTime}L"
+        buildConfigField "String", "NEON_REPO", "\"soscura27-lgtm/neon-downloader\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         archivesBaseName = "NeonDownloader-$versionName"
         vectorDrawables {
@@ -109,10 +130,11 @@ android {
     android.applicationVariants.configureEach { variant ->
         variant.outputs.each { output ->
             def baseAbiVersionCode = project.abiCodes.get(output.getFilter(com.android.build.OutputFile.ABI))
+            // cada compilación de GitHub sube el número de versión: Android la trata como una actualización
             if (baseAbiVersionCode != null) {
-                output.versionCodeOverride = (100 * project.android.defaultConfig.versionCode) + baseAbiVersionCode
+                output.versionCodeOverride = (100 * project.android.defaultConfig.versionCode) + baseAbiVersionCode + neonBuild * 100
             } else {
-                output.versionCodeOverride = 100 * project.android.defaultConfig.versionCode
+                output.versionCodeOverride = 100 * project.android.defaultConfig.versionCode + neonBuild * 100
             }
 
             def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: "universal"

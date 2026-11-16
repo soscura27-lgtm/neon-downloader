@@ -16,3 +16,6 @@ app/src/main/jniLibs
 *.p12
 *.jks
 *.keystore
+
+# Historial de cambios generado en cada compilación (scripts/ci/changelog.py)
+app/src/main/assets/neon_changelog.json

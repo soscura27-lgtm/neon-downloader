@@ -31,6 +31,9 @@ cp "$apk" "$asset"
 
 version="$(basename "$apk" .apk)"
 version="${version#NeonDownloader-}"
+# NeonDownloader-<versión>-<abi>-<tipo>-<sabor>.apk -> solo la versión (p. ej. 1.9.1.1.12)
+version="$(printf '%s' "$version" | sed -E 's/-(arm64-v8a|armeabi-v7a|x86_64|x86|universal)-.*$//')"
+build_number="${GITHUB_RUN_NUMBER:-0}"
 short_sha="${GITHUB_SHA:0:7}"
 subject="$(git -C "$ROOT" log -1 --format=%s "$GITHUB_SHA" 2>/dev/null || echo "")"
 built_at="$(date -u '+%Y-%m-%d %H:%M') UTC"
@@ -55,13 +58,15 @@ fi
 notes="$(cat <<EOF
 **Descarga directa:** [NeonDownloader.apk]($download_url)
 
-- **Versión:** $version
+- **Versión:** $version (compilación #$build_number)
 - **Cambio:** \`$short_sha\` $subject
 - **Compilado:** $built_at · [registro de la compilación]($run_url)
 - $signature
 
 Para instalar: abre el enlace desde el celular, descarga el APK y ábrelo (Android pedirá permitir
 instalar desde el navegador la primera vez).
+
+<!-- neon-build:$build_number commit:$short_sha -->
 EOF
 )"
 

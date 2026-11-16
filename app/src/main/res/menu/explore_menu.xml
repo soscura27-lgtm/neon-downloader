@@ -37,4 +37,7 @@
     <item
         android:id="@+id/explore_menu_external"
         android:title="@string/explore_open_external" />
+    <item
+        android:id="@+id/explore_menu_updates"
+        android:title="@string/neon_updates_title" />
 </menu>

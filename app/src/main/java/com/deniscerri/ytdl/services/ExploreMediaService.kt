@@ -35,7 +35,8 @@ import java.util.concurrent.Executors
  * Mantiene viva la página de Explorar mientras suena con la app minimizada o la pantalla apagada.
  *
  * Es un servicio en primer plano (tipo mediaPlayback): sin él, Android congela la app a los pocos segundos de
- * salir y el audio se corta. Enseña una notificación de reproductor con reproducir/pausar y cerrar, tiene una
+ * salir y el audio se corta. Enseña una notificación de reproductor con anterior, reproducir/pausar, siguiente
+ * (el vídeo anterior o siguiente del Mix o la playlist) y cerrar, tiene una
  * MediaSession (controles en la pantalla de bloqueo, en los audífonos y en el reloj) y sujeta la CPU y el Wi-Fi
  * mientras suena. La página sigue en el navegador de la app: este servicio solo le manda órdenes a través de
  * [ExploreBackgroundPlayback].
@@ -74,6 +75,14 @@ class ExploreMediaService : Service() {
                     ExploreBackgroundPlayback.command("pause")
                 }
 
+                override fun onSkipToNext() {
+                    ExploreBackgroundPlayback.command("next")
+                }
+
+                override fun onSkipToPrevious() {
+                    ExploreBackgroundPlayback.command("previous")
+                }
+
                 override fun onStop() {
                     closeFromUser()
                 }
@@ -90,6 +99,8 @@ class ExploreMediaService : Service() {
         val action = intent?.action
         when (action) {
             ACTION_TOGGLE -> ExploreBackgroundPlayback.command("toggle")
+            ACTION_NEXT -> ExploreBackgroundPlayback.command("next")
+            ACTION_PREVIOUS -> ExploreBackgroundPlayback.command("previous")
             ACTION_CLOSE -> {
                 closeFromUser()
                 return START_NOT_STICKY
@@ -180,6 +191,16 @@ class ExploreMediaService : Service() {
     }
 
     private fun buildNotification(playing: Boolean, title: String, artist: String): Notification {
+        val previous = Notification.Action.Builder(
+            Icon.createWithResource(this, R.drawable.ic_player_prev),
+            getString(R.string.explore_background_previous),
+            servicePendingIntent(ACTION_PREVIOUS, REQUEST_PREVIOUS)
+        ).build()
+        val next = Notification.Action.Builder(
+            Icon.createWithResource(this, R.drawable.ic_player_next),
+            getString(R.string.explore_background_next),
+            servicePendingIntent(ACTION_NEXT, REQUEST_NEXT)
+        ).build()
         val toggle = Notification.Action.Builder(
             Icon.createWithResource(this, if (playing) R.drawable.ic_player_pause else R.drawable.ic_player_play),
             getString(if (playing) R.string.explore_background_pause else R.string.explore_background_resume),
@@ -191,7 +212,8 @@ class ExploreMediaService : Service() {
             servicePendingIntent(ACTION_CLOSE, REQUEST_CLOSE)
         ).build()
 
-        val style = Notification.MediaStyle().setShowActionsInCompactView(0, 1)
+        // compacta: anterior, reproducir/pausar y siguiente; expandida, además, cerrar
+        val style = Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2)
         session?.let { style.setMediaSession(it.sessionToken) }
 
         val builder = notificationBuilder()
@@ -199,7 +221,9 @@ class ExploreMediaService : Service() {
             .setContentText(artist)
             .setOngoing(playing)
             .setDeleteIntent(servicePendingIntent(ACTION_CLOSE, REQUEST_CLOSE))
+            .addAction(previous)
             .addAction(toggle)
+            .addAction(next)
             .addAction(close)
             .setStyle(style)
         artwork?.let { builder.setLargeIcon(it) }
@@ -210,7 +234,8 @@ class ExploreMediaService : Service() {
     private fun updateSession(state: ExploreBackgroundPlayback.State, title: String, artist: String) {
         val current = session ?: return
         val actions = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
-                PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP
+                PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP or
+                PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
         current.setPlaybackState(
             PlaybackState.Builder()
                 .setActions(actions)
@@ -361,10 +386,14 @@ class ExploreMediaService : Service() {
         private const val ACTION_SHOW = "com.deniscerri.ytdl.explore.SHOW"
         private const val ACTION_TOGGLE = "com.deniscerri.ytdl.explore.TOGGLE"
         private const val ACTION_CLOSE = "com.deniscerri.ytdl.explore.CLOSE"
+        private const val ACTION_NEXT = "com.deniscerri.ytdl.explore.NEXT"
+        private const val ACTION_PREVIOUS = "com.deniscerri.ytdl.explore.PREVIOUS"
 
         private const val REQUEST_TOGGLE = 1
         private const val REQUEST_CLOSE = 2
         private const val REQUEST_OPEN = 3
+        private const val REQUEST_NEXT = 4
+        private const val REQUEST_PREVIOUS = 5
 
         private const val LOCK_TIMEOUT_MS = 3 * 60 * 60 * 1000L
         private const val PAUSED_TIMEOUT_MS = 20 * 60 * 1000L

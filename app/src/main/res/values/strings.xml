@@ -976,5 +976,28 @@
     <string name="explore_background_playing">Playing in Explore</string>
     <string name="explore_background_pause">Pause</string>
     <string name="explore_background_resume">Play</string>
+    <string name="explore_background_previous">Previous</string>
+    <string name="explore_background_next">Next</string>
     <string name="explore_background_close">Close</string>
+
+    <!-- Versión y novedades -->
+    <string name="neon_updates_title">Version and what\'s new</string>
+    <string name="neon_updates_updated">Updated!</string>
+    <string name="neon_updates_installed">Build #%1$d was installed correctly.</string>
+    <string name="neon_updates_installed_local">The new version was installed correctly.</string>
+    <string name="neon_updates_version">Neon Downloader %1$s</string>
+    <string name="neon_updates_build">Build #%1$d · %2$s</string>
+    <string name="neon_updates_build_local">Local build · %1$s</string>
+    <string name="neon_updates_commit">Change %1$s · branch %2$s</string>
+    <string name="neon_updates_check">Check for updates</string>
+    <string name="neon_updates_checking">Checking GitHub…</string>
+    <string name="neon_updates_latest">You have the latest build (#%1$d).</string>
+    <string name="neon_updates_available">A new build is available: #%1$d (%2$s)</string>
+    <string name="neon_updates_download">Download</string>
+    <string name="neon_updates_failed">Couldn\'t check: %1$s</string>
+    <string name="neon_updates_unknown">No published build was found yet.</string>
+    <string name="neon_updates_changes">What\'s new</string>
+    <string name="neon_updates_new_count">New since your previous version: %1$d</string>
+    <string name="neon_updates_new_badge">NEW</string>
+    <string name="neon_updates_empty">The change history comes with the GitHub builds.</string>
 </resources>

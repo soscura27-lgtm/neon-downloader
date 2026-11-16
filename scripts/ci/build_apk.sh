@@ -11,6 +11,10 @@ cd "$ROOT"
 
 bash scripts/ci/prepare_signing.sh
 
+# historial de cambios para "Versión y novedades" (se mete en el APK; no se sube al repositorio)
+python3 scripts/ci/changelog.py "$ROOT/app/src/main/assets/neon_changelog.json" 80 ||
+  echo "AVISO: no se generó el historial de cambios; la app lo mostrará vacío."
+
 # githubRelease -> assembleGithubRelease
 chmod +x ./gradlew 2>/dev/null || true
 ./gradlew ":app:assemble${VARIANT^}" --stacktrace

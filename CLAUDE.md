@@ -19,6 +19,9 @@ Reglas permanentes pedidas por el dueño del proyecto. Valen para cualquier sesi
 ## Proyecto
 - Fork personal de YTDLnis v1.9.1.1 (GPL-3.0) con tema Neon Space; paquete `com.diego.neondownloader`.
 - Textos de la app, comentarios del código y mensajes de commit en español.
+- Los mensajes de commit se ven dentro de la app ("Versión y novedades", generado por
+  `scripts/ci/changelog.py`): el título debe decir en lenguaje claro qué cambia para quien usa la app.
+- Versión = `1.9.1.1.<número de compilación de GitHub Actions>`; el versionCode sube solo en cada compilación.
 - Cada cambio propio se resume en `CHANGES.md` (aviso de modificación de la GPL) y, si se nota al
   usarla, en `README.md`.
 - Explorar (YouTube, películas y series dentro de la app):

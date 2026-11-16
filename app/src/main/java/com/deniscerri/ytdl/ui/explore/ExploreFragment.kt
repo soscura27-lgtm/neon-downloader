@@ -61,6 +61,7 @@ import com.deniscerri.ytdl.database.viewmodel.DownloadProgressViewModel
 import com.deniscerri.ytdl.database.viewmodel.DownloadViewModel
 import com.deniscerri.ytdl.database.viewmodel.ResultViewModel
 import com.deniscerri.ytdl.ui.downloads.QueuePlacementDialog
+import com.deniscerri.ytdl.ui.more.NeonUpdates
 import com.deniscerri.ytdl.util.QueuePlacement
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
@@ -636,6 +637,7 @@ class ExploreFragment : Fragment() {
                 }
                 R.id.explore_menu_copy -> copyLink(refreshUrl())
                 R.id.explore_menu_external -> openInExternalBrowser(refreshUrl())
+                R.id.explore_menu_updates -> NeonUpdates.show(requireActivity())
                 R.id.explore_menu_background -> {
                     val enabled = !ExploreBackgroundPlayback.isEnabled(prefs)
                     prefs.edit().putBoolean(ExploreBackgroundPlayback.PREF_ENABLED, enabled).apply()
@@ -1853,7 +1855,7 @@ class ExploreFragment : Fragment() {
     private fun runMediaCommand(command: String) {
         val wv = webView ?: return
         when (command) {
-            "play", "pause", "toggle" -> {
+            "play", "pause", "toggle", "next", "previous" -> {
                 // la app está fuera y la página dormida: se despierta para que pueda volver a sonar
                 if (command != "pause" && !isResumed && !backgroundActive && ExploreBackgroundPlayback.isEnabled(prefs)) {
                     wv.onResume()

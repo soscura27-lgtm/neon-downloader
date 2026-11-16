@@ -129,6 +129,11 @@ class MoreFragment : Fragment() {
             startActivity(intent)
         }
 
+        view.findViewById<TextView>(R.id.neon_updates).apply {
+            text = NeonUpdates.menuLabel(requireContext())
+            setOnClickListener { NeonUpdates.show(requireActivity()) }
+        }
+
     }
 
     fun showTerminateConfirmationDialog(skipPreference: Boolean = false) {

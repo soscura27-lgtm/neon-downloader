@@ -44,7 +44,13 @@ cian y naranja neón, tipografía Orbitron y fondo espacial). Está basada en
   webs) no se corta al salir de la app ni al apagar la pantalla. Aparece una notificación con reproducir/pausar
   y cerrar, con controles en la pantalla de bloqueo y en los audífonos. Si cambias de pestaña dentro de la app,
   el audio pasa solo al reproductor de "Escuchar" desde el mismo segundo. Se activa y desactiva en el menú ⋮
-  ("Seguir sonando en segundo plano").
+  ("Seguir sonando en segundo plano"). La notificación tiene **anterior y siguiente**: pasa al vídeo anterior o
+  siguiente del Mix o la playlist (en un vídeo suelto, al recomendado; "anterior" con la canción empezada vuelve
+  al principio).
+- **Versión y novedades** (en Más y en el menú ⋮ de Explorar): número de compilación, fecha y cambio instalados,
+  la lista de cambios y "Buscar actualización" (compara con la última compilación publicada en GitHub). Al abrir
+  la app después de actualizar aparece solo como **"¡Actualizada!"** con lo nuevo marcado: así sabes que se
+  instaló bien. El número de versión lleva la compilación al final (1.9.1.1.**12**).
 - **Lugar en la cola**: al descargar puedes pedir "la siguiente" o "la posición 3", y en la pantalla
   de la cola puedes mover lo seleccionado a la posición que quieras.
 - Instala aparte de YTDLnis original: su paquete es `com.diego.neondownloader`.

@@ -96,7 +96,107 @@
   // La app también puede preguntar directamente (WebView antiguos sin canal de mensajes).
   root.__neonMediaState = function () { return JSON.stringify(state()); };
 
+  // --- Anterior / siguiente (Mix, playlists, vídeos sueltos y Shorts) ---
+
+  var NEXT_BUTTONS = [
+    '.ytp-next-button', '#movie_player [aria-label*="next video" i]', '#movie_player [aria-label*="siguiente" i]',
+    'button[aria-label*="next video" i]', 'button[aria-label*="siguiente vídeo" i]', 'button[aria-label*="siguiente video" i]'
+  ];
+  var PREVIOUS_BUTTONS = [
+    '.ytp-prev-button', '#movie_player [aria-label*="previous video" i]', '#movie_player [aria-label*="anterior" i]',
+    'button[aria-label*="previous video" i]', 'button[aria-label*="vídeo anterior" i]', 'button[aria-label*="video anterior" i]'
+  ];
+
+  function clickFirst(selectors) {
+    for (var i = 0; i < selectors.length; i++) {
+      var button = null;
+      try { button = document.querySelector(selectors[i]); } catch (e) { /* selector no admitido */ }
+      if (button && !button.disabled && button.getAttribute('aria-disabled') !== 'true') {
+        button.click();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function currentVideoId() {
+    var match = location.href.match(/[?&]v=([\w-]{11})/) || location.pathname.match(/\/shorts\/([\w-]{11})/);
+    return match ? match[1] : '';
+  }
+
+  // En un Mix o una playlist: el vídeo de la lista que va antes o después del que suena.
+  function stepInList(step) {
+    var list = (location.search.match(/[?&]list=([\w-]+)/) || [])[1];
+    var current = currentVideoId();
+    if (!list || !current) { return false; }
+    var ids = [], links = {};
+    var anchors = document.querySelectorAll('a[href*="list=' + list + '"]');
+    for (var i = 0; i < anchors.length; i++) {
+      var m = (anchors[i].getAttribute('href') || '').match(/[?&]v=([\w-]{11})/);
+      if (m && !links[m[1]]) { ids.push(m[1]); links[m[1]] = anchors[i]; }
+    }
+    var target = links[ids[ids.indexOf(current) + step]];
+    if (ids.indexOf(current) < 0 || !target) { return false; }
+    target.click();
+    return true;
+  }
+
+  // Vídeo suelto: el primero de los recomendados (lo que YouTube pondría a continuación).
+  function firstSuggestion() {
+    var current = currentVideoId();
+    var anchors = document.querySelectorAll('a[href*="/watch?v="]');
+    for (var i = 0; i < anchors.length; i++) {
+      var m = (anchors[i].getAttribute('href') || '').match(/[?&]v=([\w-]{11})/);
+      if (m && m[1] !== current) { anchors[i].click(); return true; }
+    }
+    return false;
+  }
+
+  // Shorts: se desliza la lista vertical una pantalla arriba o abajo.
+  function stepInShorts(step) {
+    var el = mainMedia();
+    while (el && el !== document.body && el !== document.documentElement) {
+      var style = getComputedStyle(el);
+      if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 10) {
+        el.scrollBy({ top: step * el.clientHeight, behavior: 'smooth' });
+        return true;
+      }
+      el = el.parentElement;
+    }
+    root.scrollBy({ top: step * root.innerHeight, behavior: 'smooth' });
+    return true;
+  }
+
+  function skip(step) {
+    var media = mainMedia();
+    // "Anterior" con la canción ya empezada vuelve al principio, como en cualquier reproductor
+    if (step < 0 && media && media.currentTime > 5) {
+      media.currentTime = 0;
+      return true;
+    }
+    if (/^\/shorts\//.test(location.pathname)) { return stepInShorts(step); }
+
+    var before = location.href;
+    var player = document.getElementById('movie_player');
+    var method = step > 0 ? 'nextVideo' : 'previousVideo';
+    var asked = false;
+    try {
+      if (player && typeof player[method] === 'function') { player[method](); asked = true; }
+    } catch (e) { /* el reproductor no lo admite aquí */ }
+
+    // si el reproductor no cambió de vídeo, se prueba con sus botones, la lista o la página anterior
+    setTimeout(function () {
+      if (location.href !== before) { return; }
+      if (clickFirst(step > 0 ? NEXT_BUTTONS : PREVIOUS_BUTTONS)) { return; }
+      if (stepInList(step)) { return; }
+      if (step > 0) { firstSuggestion(); } else { history.back(); }
+    }, asked ? 1500 : 0);
+    return true;
+  }
+
   root.__neonMediaCommand = function (command) {
+    if (command === 'next') { return skip(1); }
+    if (command === 'previous') { return skip(-1); }
     var media = mainMedia();
     if (!media) { return false; }
     try {
