@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -40,6 +41,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -119,6 +121,33 @@ class ExploreFragment : Fragment() {
 
     private var adBlockScript: ScriptHandler? = null
 
+    // Reproducción en segundo plano: lo que suena en la página y si ahora mismo suena con la app fuera
+    private var backgroundScript: ScriptHandler? = null
+    private var mediaState: ExploreBackgroundPlayback.State? = null
+    private var mediaChannel = false
+    private var backgroundActive = false
+    private var savedRendererPriority: Pair<Int, Boolean>? = null
+    private val mediaHandler = Handler(Looper.getMainLooper())
+    private val mediaCommander: (String) -> Unit = { command -> runMediaCommand(command) }
+
+    /** WebView antiguos sin canal de mensajes: se pregunta a la página cada poco. */
+    private val pollMedia = object : Runnable {
+        override fun run() {
+            val wv = webView ?: return
+            wv.evaluateJavascript(MEDIA_STATE_SCRIPT) { raw -> onMediaMessage(raw) }
+            mediaHandler.postDelayed(this, MEDIA_POLL_MS)
+        }
+    }
+
+    /** Pausa y vuelta de la app entera (no de esta pestaña): al cambiar de pestaña decide onDestroyView. */
+    private val activityObserver = LifecycleEventObserver { _, event ->
+        when (event) {
+            Lifecycle.Event.ON_PAUSE -> onAppHidden()
+            Lifecycle.Event.ON_RESUME -> onAppShown()
+            else -> Unit
+        }
+    }
+
     /** Subida de archivos desde la página (fotos, GIF...): la respuesta del selector va a este callback. */
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val fileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -187,6 +216,8 @@ class ExploreFragment : Fragment() {
         setupBackHandling()
         observeDuplicates()
         observeDownloadLevel(view)
+        ExploreBackgroundPlayback.attach(mediaCommander)
+        activity.lifecycle.addObserver(activityObserver)
     }
 
     // ------------------------------------------------------------------------------------------
@@ -214,6 +245,7 @@ class ExploreFragment : Fragment() {
         }
         applyBrowserMode(wv)
         applyAdBlock(wv)
+        installBackgroundPlayback(wv)
 
         wv.webViewClient = ExploreClient()
         wv.webChromeClient = ExploreChromeClient()
@@ -327,6 +359,7 @@ class ExploreFragment : Fragment() {
             progress.visibility = View.VISIBLE
             onUrlChanged(url)
             injectAdBlockFallback(view, url)
+            injectBackgroundFallback(view)
         }
 
         override fun onPageFinished(view: WebView?, url: String?) {
@@ -336,6 +369,7 @@ class ExploreFragment : Fragment() {
             CookieManager.getInstance().flush()
             checkSignIn()
             injectAdBlockFallback(view, url)
+            injectBackgroundFallback(view)
         }
 
         // YouTube cambia de página sin recargar (también al deslizar Shorts): aquí se entera la app de cada cambio
@@ -585,6 +619,7 @@ class ExploreFragment : Fragment() {
             title = getString(R.string.explore_adblock_menu, AdBlocker.blockedCount)
         }
         popup.menu.findItem(R.id.explore_menu_ask_position).isChecked = prefs.getBoolean(PREF_ASK_POSITION, true)
+        popup.menu.findItem(R.id.explore_menu_background).isChecked = ExploreBackgroundPlayback.isEnabled(prefs)
         popup.menu.findItem(R.id.explore_menu_forward).isEnabled = webView?.canGoForward() == true
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -601,6 +636,11 @@ class ExploreFragment : Fragment() {
                 }
                 R.id.explore_menu_copy -> copyLink(refreshUrl())
                 R.id.explore_menu_external -> openInExternalBrowser(refreshUrl())
+                R.id.explore_menu_background -> {
+                    val enabled = !ExploreBackgroundPlayback.isEnabled(prefs)
+                    prefs.edit().putBoolean(ExploreBackgroundPlayback.PREF_ENABLED, enabled).apply()
+                    toast(if (enabled) R.string.explore_background_on else R.string.explore_background_off)
+                }
             }
             true
         }
@@ -1753,22 +1793,150 @@ class ExploreFragment : Fragment() {
     }
 
     // ------------------------------------------------------------------------------------------
+    // Reproducción en segundo plano (música y vídeo siguen al salir de la app o apagar la pantalla)
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * Script que mantiene la página "visible" y cuenta lo que suena, en todas las webs, y el canal por el que lo cuenta.
+     * Si el WebView no tiene canal de mensajes, se le pregunta a la página cada pocos segundos.
+     */
+    private fun installBackgroundPlayback(wv: WebView) {
+        val script = ExploreBackgroundPlayback.script(wv.context)
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            backgroundScript = runCatching {
+                WebViewCompat.addDocumentStartJavaScript(wv, script, ALL_ORIGINS)
+            }.recoverCatching {
+                WebViewCompat.addDocumentStartJavaScript(wv, script, YOUTUBE_ORIGINS)
+            }.getOrNull()
+        }
+        mediaChannel = false
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            val listener = WebViewCompat.WebMessageListener { _, message, _, isMainFrame, _ ->
+                if (isMainFrame) onMediaMessage(message.data)
+            }
+            mediaChannel = runCatching {
+                WebViewCompat.addWebMessageListener(wv, MEDIA_CHANNEL, ALL_ORIGINS, listener)
+                true
+            }.recoverCatching {
+                WebViewCompat.addWebMessageListener(wv, MEDIA_CHANNEL, YOUTUBE_ORIGINS, listener)
+                true
+            }.getOrDefault(false)
+        }
+        if (!mediaChannel) {
+            mediaHandler.removeCallbacks(pollMedia)
+            mediaHandler.postDelayed(pollMedia, MEDIA_POLL_MS)
+        }
+    }
+
+    private fun injectBackgroundFallback(view: WebView?) {
+        if (view == null || backgroundScript != null) return
+        view.evaluateJavascript(ExploreBackgroundPlayback.script(view.context), null)
+    }
+
+    /** La página contó qué suena (o se le preguntó). */
+    private fun onMediaMessage(raw: String?) {
+        if (view == null) return
+        val state = ExploreBackgroundPlayback.State.fromJson(raw) ?: return
+        mediaState = state
+        ExploreBackgroundPlayback.update(state)
+    }
+
+    /** Órdenes de la notificación, la pantalla de bloqueo o los audífonos. */
+    private fun runMediaCommand(command: String) {
+        val wv = webView ?: return
+        when (command) {
+            "play", "pause", "toggle" ->
+                wv.evaluateJavascript("window.__neonMediaCommand && window.__neonMediaCommand('$command')", null)
+            "suspend" -> {
+                // ya no se quiere sonar fuera de la app: si no está a la vista, el navegador se pausa como siempre
+                if (backgroundActive) {
+                    backgroundActive = false
+                    keepRendererAlive(wv, false)
+                    if (!isResumed) wv.onPause()
+                }
+            }
+        }
+    }
+
+    /** La app se oculta (inicio, otra app, pantalla apagada): si algo suena, sigue sonando. */
+    private fun onAppHidden() {
+        val wv = webView ?: return
+        val activity = activity ?: return
+        val keepPlaying = mediaState?.playing == true &&
+                ExploreBackgroundPlayback.isEnabled(prefs) &&
+                !activity.isChangingConfigurations
+        if (keepPlaying && ExploreBackgroundPlayback.startService(activity)) {
+            backgroundActive = true
+            keepRendererAlive(wv, true)
+        } else {
+            wv.onPause()
+        }
+    }
+
+    /** La app vuelve a estar a la vista. */
+    private fun onAppShown() {
+        val wv = webView ?: return
+        wv.onResume()
+        if (backgroundActive) {
+            backgroundActive = false
+            keepRendererAlive(wv, false)
+            ExploreBackgroundPlayback.stopService()
+        }
+    }
+
+    /** Con la app fuera, el proceso que dibuja la página no se rebaja de prioridad (Android no lo congela). */
+    private fun keepRendererAlive(wv: WebView, keep: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        runCatching {
+            if (keep) {
+                if (savedRendererPriority == null) {
+                    savedRendererPriority = wv.rendererRequestedPriority to wv.rendererPriorityWaivedWhenNotVisible
+                }
+                wv.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+            } else {
+                savedRendererPriority?.let { (priority, waived) -> wv.setRendererPriorityPolicy(priority, waived) }
+                savedRendererPriority = null
+            }
+        }
+    }
+
+    /**
+     * La página se cierra. Si se cambió de pestaña (o Android cerró la pantalla) mientras sonaba algo de YouTube,
+     * el audio sigue en el reproductor de la app desde el mismo segundo. Al girar la pantalla no: la página vuelve.
+     */
+    private fun finishBackgroundPlayback() {
+        mediaHandler.removeCallbacks(pollMedia)
+        val activity = activity
+        activity?.lifecycle?.removeObserver(activityObserver)
+        val state = mediaState
+        if (state?.playing == true && activity != null && !activity.isChangingConfigurations &&
+            this::prefs.isInitialized && ExploreBackgroundPlayback.isEnabled(prefs) &&
+            ExploreBackgroundPlayback.handOverToMusic(activity, state)
+        ) {
+            Toast.makeText(activity.applicationContext, R.string.explore_background_handoff, Toast.LENGTH_SHORT).show()
+        }
+        ExploreBackgroundPlayback.detach(mediaCommander)
+        ExploreBackgroundPlayback.stopService()
+        backgroundActive = false
+        mediaState = null
+        savedRendererPriority = null
+    }
+
+    // ------------------------------------------------------------------------------------------
     // Ciclo de vida
     // ------------------------------------------------------------------------------------------
 
-    override fun onResume() {
-        super.onResume()
-        webView?.onResume()
-    }
-
+    // El navegador se pausa o se reanuda cuando la app entera se oculta o vuelve (onAppHidden / onAppShown), no al
+    // cambiar de pestaña: en ese caso la vista se destruye y onDestroyView decide si lo que suena sigue en el
+    // reproductor de audio.
     override fun onPause() {
-        webView?.onPause()
         CookieManager.getInstance().flush()
         super.onPause()
     }
 
     override fun onDestroyView() {
         if (this::prefs.isInitialized) prefs.unregisterOnSharedPreferenceChangeListener(kindListener)
+        finishBackgroundPlayback()
         fetchJob?.cancel()
         fetchJob = null
         progressDialog?.dismiss()
@@ -1784,6 +1952,7 @@ class ExploreFragment : Fragment() {
         exitFullscreen()
         webView?.let { wv ->
             adBlockScript = null
+            backgroundScript = null
             runCatching {
                 val bundle = Bundle()
                 wv.saveState(bundle)
@@ -1806,6 +1975,13 @@ class ExploreFragment : Fragment() {
         private const val PREF_USE_ACCOUNT = "explore_use_account"
         private const val PREF_ACCOUNT_PROMPTED = "explore_account_prompted"
         private const val COOKIE_DESCRIPTION = "Explorar (cuenta de Google)"
+
+        /** Canal por el que la página cuenta lo que suena (res/raw/explore_background.js). */
+        private const val MEDIA_CHANNEL = "neonMedia"
+        private const val MEDIA_POLL_MS = 3000L
+        private const val MEDIA_STATE_SCRIPT = "window.__neonMediaState ? window.__neonMediaState() : null"
+        private val ALL_ORIGINS: Set<String> = setOf("*")
+        private val YOUTUBE_ORIGINS: Set<String> = setOf("https://*.youtube.com", "https://youtube.com")
 
         /** Máximo de imágenes que se guardan de una publicación o de una página. */
         private const val MAX_POST_IMAGES = 20

@@ -632,6 +632,12 @@
             android:foregroundServiceType="specialUse"
             android:exported="false" />
 
+        <!-- Explorar: mantiene viva la página mientras suena con la app fuera o la pantalla apagada -->
+        <service
+            android:name=".services.ExploreMediaService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <service
             android:name=".services.MusicService"
             android:exported="true"

@@ -966,4 +966,15 @@
     <string name="comments_open_app_short">Open app</string>
     <string name="comments_open_app">Open in the YouTube app</string>
     <string name="comments_hint_hide">Hide notice</string>
+
+    <!-- Explorar: reproducción en segundo plano -->
+    <string name="explore_background_menu">Keep playing in the background</string>
+    <string name="explore_background_on">Music and videos keep playing when you leave the app</string>
+    <string name="explore_background_off">Playback stops when you leave the app</string>
+    <string name="explore_background_handoff">The audio keeps playing in the background</string>
+    <string name="explore_background_channel">Explore: background playback</string>
+    <string name="explore_background_playing">Playing in Explore</string>
+    <string name="explore_background_pause">Pause</string>
+    <string name="explore_background_resume">Play</string>
+    <string name="explore_background_close">Close</string>
 </resources>

@@ -67,6 +67,15 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
   solo lo acepta la app oficial: acceso directo a ella.
 - **Subida de archivos** (`onShowFileChooser`) en Explorar y en el visor de comentarios, e identidad de Chrome
   compartida (`ExploreBrowser.kt`; en modo escritorio los client hints también dicen escritorio).
+- **Reproducción en segundo plano de Explorar** (`ExploreBackgroundPlayback.kt`, `services/ExploreMediaService.kt`,
+  `res/raw/explore_background.js`): antes, al salir de la app Explorar llamaba a `WebView.onPause()`, YouTube pausaba
+  al ver la página oculta y Android congelaba la app. Ahora la página siempre se cree visible (sin
+  `visibilitychange`, con aviso de actividad para el "¿Sigues viendo?"), cuenta lo que suena por un canal de mensajes
+  (`addWebMessageListener`; en WebView antiguos se le pregunta cada pocos segundos) y, al ocultarse la app con algo
+  sonando, un servicio en primer plano `mediaPlayback` la mantiene viva: notificación de reproductor con MediaSession
+  (pantalla de bloqueo, audífonos), bloqueos de CPU y Wi-Fi y el proceso de la página con prioridad alta. La pausa del
+  navegador sigue a la app entera (no a la pestaña); al cambiar de pestaña, lo que sonaba de YouTube pasa a
+  `MusicService` en el mismo segundo. Opción en el menú ⋮ (activada por defecto).
 - Icono de cohete y planeta (vector adaptable, monocromo y PNG heredados).
 
 ## Proyecto
