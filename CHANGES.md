@@ -76,6 +76,9 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
   (pantalla de bloqueo, audífonos), bloqueos de CPU y Wi-Fi y el proceso de la página con prioridad alta. La pausa del
   navegador sigue a la app entera (no a la pestaña); al cambiar de pestaña, lo que sonaba de YouTube pasa a
   `MusicService` en el mismo segundo. Opción en el menú ⋮ (activada por defecto).
+  Como en Brave: `ExploreWebView` no le cuenta al motor que la ventana se ocultó (Chromium pausa en Android los
+  vídeos de una página oculta), la notificación aparece en cuanto algo suena (el servicio ya está en marcha al
+  salir) y reproducir desde la notificación despierta la página aunque la app esté fuera.
 - Icono de cohete y planeta (vector adaptable, monocromo y PNG heredados).
 
 ## Proyecto

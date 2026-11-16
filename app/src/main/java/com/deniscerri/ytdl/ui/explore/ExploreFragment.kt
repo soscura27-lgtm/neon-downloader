@@ -95,7 +95,7 @@ class ExploreFragment : Fragment() {
     private lateinit var cookieViewModel: CookieViewModel
     private lateinit var progressViewModel: DownloadProgressViewModel
 
-    private var webView: WebView? = null
+    private var webView: ExploreWebView? = null
     private lateinit var searchField: TextInputEditText
     private lateinit var progress: LinearProgressIndicator
     private lateinit var downloadCorner: View
@@ -225,7 +225,7 @@ class ExploreFragment : Fragment() {
     // ------------------------------------------------------------------------------------------
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView(wv: WebView) {
+    private fun setupWebView(wv: ExploreWebView) {
         webView = wv
 
         val cookies = CookieManager.getInstance()
@@ -1710,6 +1710,8 @@ class ExploreFragment : Fragment() {
 
     private fun startMusic(items: List<MediaItem>, startIndex: Int, positionMs: Long, mode: ExplorePlayer.Mode) {
         if (!isAdded || view == null) return
+        // la página ya está en pausa: su notificación sobra (el reproductor de audio pone la suya)
+        ExploreBackgroundPlayback.stopService()
         player.play(items, startIndex, positionMs, mode)
         toast(
             when (mode) {
@@ -1833,25 +1835,36 @@ class ExploreFragment : Fragment() {
         view.evaluateJavascript(ExploreBackgroundPlayback.script(view.context), null)
     }
 
-    /** La página contó qué suena (o se le preguntó). */
+    /**
+     * La página contó qué suena (o se le preguntó). Como en Brave, en cuanto algo suena aparece la notificación del
+     * reproductor: así el servicio que mantiene viva la app ya está en marcha antes de salir de ella.
+     */
     private fun onMediaMessage(raw: String?) {
         if (view == null) return
         val state = ExploreBackgroundPlayback.State.fromJson(raw) ?: return
         mediaState = state
         ExploreBackgroundPlayback.update(state)
+        if (state.playing && ExploreBackgroundPlayback.isEnabled(prefs) && !ExploreBackgroundPlayback.serviceActive) {
+            ExploreBackgroundPlayback.startService(requireContext())
+        }
     }
 
     /** Órdenes de la notificación, la pantalla de bloqueo o los audífonos. */
     private fun runMediaCommand(command: String) {
         val wv = webView ?: return
         when (command) {
-            "play", "pause", "toggle" ->
+            "play", "pause", "toggle" -> {
+                // la app está fuera y la página dormida: se despierta para que pueda volver a sonar
+                if (command != "pause" && !isResumed && !backgroundActive && ExploreBackgroundPlayback.isEnabled(prefs)) {
+                    wv.onResume()
+                    enterBackgroundMode(wv)
+                }
                 wv.evaluateJavascript("window.__neonMediaCommand && window.__neonMediaCommand('$command')", null)
+            }
             "suspend" -> {
                 // ya no se quiere sonar fuera de la app: si no está a la vista, el navegador se pausa como siempre
                 if (backgroundActive) {
-                    backgroundActive = false
-                    keepRendererAlive(wv, false)
+                    leaveBackgroundMode(wv)
                     if (!isResumed) wv.onPause()
                 }
             }
@@ -1865,23 +1878,34 @@ class ExploreFragment : Fragment() {
         val keepPlaying = mediaState?.playing == true &&
                 ExploreBackgroundPlayback.isEnabled(prefs) &&
                 !activity.isChangingConfigurations
-        if (keepPlaying && ExploreBackgroundPlayback.startService(activity)) {
-            backgroundActive = true
-            keepRendererAlive(wv, true)
+        if (keepPlaying && (ExploreBackgroundPlayback.serviceActive || ExploreBackgroundPlayback.startService(activity))) {
+            enterBackgroundMode(wv)
         } else {
             wv.onPause()
         }
     }
 
-    /** La app vuelve a estar a la vista. */
+    /** La app vuelve a estar a la vista (la notificación sigue mientras algo suene, como en Brave). */
     private fun onAppShown() {
         val wv = webView ?: return
+        if (backgroundActive) leaveBackgroundMode(wv)
         wv.onResume()
-        if (backgroundActive) {
-            backgroundActive = false
-            keepRendererAlive(wv, false)
-            ExploreBackgroundPlayback.stopService()
-        }
+    }
+
+    /**
+     * La página sigue sonando con la app fuera: el navegador no se entera de que la ventana se ocultó (si se
+     * enterara, el motor pausaría el vídeo) y el proceso que dibuja la página conserva su prioridad.
+     */
+    private fun enterBackgroundMode(wv: ExploreWebView) {
+        backgroundActive = true
+        wv.keepAlive = true
+        keepRendererAlive(wv, true)
+    }
+
+    private fun leaveBackgroundMode(wv: ExploreWebView) {
+        backgroundActive = false
+        wv.keepAlive = false
+        keepRendererAlive(wv, false)
     }
 
     /** Con la app fuera, el proceso que dibuja la página no se rebaja de prioridad (Android no lo congela). */
@@ -1917,6 +1941,7 @@ class ExploreFragment : Fragment() {
         }
         ExploreBackgroundPlayback.detach(mediaCommander)
         ExploreBackgroundPlayback.stopService()
+        webView?.keepAlive = false
         backgroundActive = false
         mediaState = null
         savedRendererPriority = null

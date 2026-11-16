@@ -271,7 +271,8 @@
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <WebView
+            <!-- WebView que puede seguir sonando en segundo plano (ver ExploreWebView) -->
+            <com.deniscerri.ytdl.ui.explore.ExploreWebView
                 android:id="@+id/explore_webview"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />

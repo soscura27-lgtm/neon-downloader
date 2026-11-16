@@ -40,7 +40,7 @@ cian y naranja neón, tipografía Orbitron y fondo espacial). Está basada en
 - **Escuchar** en Explorar: solo el audio del vídeo, la playlist o el Mix que estés viendo, sin vídeo y en
   segundo plano (sigue sonando con la pantalla apagada, con notificación y controles). Se puede añadir
   a una cola de audio (ahora, a continuación o al final).
-- **Sigue sonando en segundo plano**: lo que suena en Explorar (música o vídeo de YouTube, y también otras
+- **Sigue sonando en segundo plano, como en Brave**: lo que suena en Explorar (música o vídeo de YouTube, y también otras
   webs) no se corta al salir de la app ni al apagar la pantalla. Aparece una notificación con reproducir/pausar
   y cerrar, con controles en la pantalla de bloqueo y en los audífonos. Si cambias de pestaña dentro de la app,
   el audio pasa solo al reproductor de "Escuchar" desde el mismo segundo. Se activa y desactiva en el menú ⋮

@@ -110,7 +110,11 @@ object ExploreBackgroundPlayback {
         ExploreMediaService.refresh()
     }
 
-    /** Empieza a mantener viva la página (con la app aún a la vista). false si Android no lo permite ahora. */
+    /** El servicio (y su notificación) está en marcha o a punto de arrancar. */
+    val serviceActive: Boolean
+        get() = ExploreMediaService.active
+
+    /** Arranca el servicio que mantiene viva la página. false si Android no lo permite ahora. */
     fun startService(context: Context): Boolean = ExploreMediaService.start(context)
 
     fun stopService() {

@@ -106,6 +106,7 @@ class ExploreMediaService : Service() {
 
     override fun onDestroy() {
         if (instance?.get() === this) instance = null
+        wanted = false
         main.removeCallbacksAndMessages(null)
         releaseLocks()
         session?.release()
@@ -373,7 +374,11 @@ class ExploreMediaService : Service() {
         /** false entre [stop] y el siguiente [start]: un arranque que llegue tarde se cierra solo. */
         private var wanted = false
 
-        /** Empieza a mantener viva la página (la app todavía está a la vista). false si Android no lo deja. */
+        /** El servicio está en marcha o a punto de arrancar. */
+        val active: Boolean
+            get() = wanted
+
+        /** Empieza a mantener viva la página (lo normal: en cuanto algo suena, con la app a la vista). false si Android no lo deja. */
         fun start(context: Context): Boolean {
             wanted = true
             val app = context.applicationContext
@@ -394,7 +399,7 @@ class ExploreMediaService : Service() {
             instance?.get()?.showNotification()
         }
 
-        /** La app vuelve a estar a la vista, o la página se cerró: ya no hace falta el servicio. */
+        /** La página se cerró o se pasó a "Escuchar": ya no hace falta el servicio. */
         fun stop() {
             wanted = false
             instance?.get()?.stopEverything()

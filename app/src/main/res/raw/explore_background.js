@@ -58,18 +58,22 @@
   // 3. Estado de lo que suena y órdenes de la app
   // ---------------------------------------------------------------------------------------------
 
-  // El vídeo principal: el reproductor de YouTube o, en otras webs, el que está sonando.
+  // Lo que suena ahora: primero cualquier vídeo o audio que esté sonando (en los Shorts hay varios vídeos
+  // precargados), después el reproductor principal de YouTube y, si no, el primero que tenga contenido.
   function mainMedia() {
+    var all = document.querySelectorAll('video, audio');
+    var i, m;
+    for (i = 0; i < all.length; i++) {
+      m = all[i];
+      if (!m.paused && !m.ended && !m.muted && m.readyState > 0) { return m; }
+    }
     var youtube = document.querySelector('#movie_player video, video.html5-main-video');
     if (youtube) { return youtube; }
-    var all = document.querySelectorAll('video, audio');
-    var fallback = null;
-    for (var i = 0; i < all.length; i++) {
-      var m = all[i];
-      if (!m.paused && !m.ended && !m.muted) { return m; }
-      if (!fallback && (m.currentSrc || m.src)) { fallback = m; }
+    for (i = 0; i < all.length; i++) {
+      m = all[i];
+      if (m.currentSrc || m.src) { return m; }
     }
-    return fallback;
+    return null;
   }
 
   function state() {
