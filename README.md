@@ -47,6 +47,11 @@ cian y naranja neón, tipografía Orbitron y fondo espacial). Está basada en
   ("Seguir sonando en segundo plano"). La notificación tiene **anterior y siguiente**: pasa al vídeo anterior o
   siguiente del Mix o la playlist (en un vídeo suelto, al recomendado; "anterior" con la canción empezada vuelve
   al principio).
+- **Vídeos en horizontal como en la app de YouTube**: al girar el teléfono en un vídeo, el reproductor llena la
+  pantalla (sin barras de la app ni del sistema) y la página **ya no se recarga**: el vídeo sigue en el mismo
+  segundo y con sonido. El botón de pantalla completa de YouTube hace lo mismo (gira a horizontal) y "atrás" sale
+  de la pantalla completa. Los vídeos ya no empiezan en silencio con "ACTIVAR SONIDO" (salvo que los silencies tú).
+  La franja de descargas de Explorar es ahora una línea fina.
 - **Letra de lo que suena**: una pantalla con **solo la letra** de la canción que suena en Explorar o en "Escuchar"
   (botón de la letra en la barra de "Escuchar", "Ver la letra" en el botón de la esquina, el menú ⋮ de Explorar y
   Más → "Letra de lo que suena"). **Copiar letra** la copia entera y **Seleccionar** la deja como texto para

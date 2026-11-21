@@ -88,6 +88,19 @@ Aviso de modificación (GPL‑3.0 §5a). Base: <https://github.com/deniscerri/yt
   historial (`assets/neon_changelog.json`, no se sube al repositorio). Aviso "¡Actualizada!" al abrir una compilación
   distinta (`MainActivity`), fila en Más, opción en el menú de Explorar y comprobación de la última compilación
   publicada (las notas de cada Release llevan `neon-build:N`).
+- **Giro y pantalla completa en Explorar** (`ExploreFragment.kt`, `ExploreViewModel.kt`, `res/raw/explore_watch.js`,
+  `MainActivity.setFullscreen`): al girar, Android recreaba la actividad y el WebView se destruía (la página se
+  recargaba y YouTube volvía a empezar el vídeo en silencio). Ahora el WebView se crea con un `MutableContextWrapper`
+  y, si la actividad se recrea por un cambio de configuración, se guarda en el ViewModel y se vuelve a colocar en la
+  vista nueva (los avisos de la página pasan por un relevo; durante el cambio solo queda el bloqueador de anuncios).
+  En horizontal, en un vídeo de YouTube, se esconden la barra de Explorar, la de navegación y las del sistema; el
+  navegador se hace tan ancho como para que el reproductor (que en YouTube ocupa todo el ancho) tenga la altura de
+  la pantalla, se centra y se sube lo que mida la cabecera (se mide en la página con `__neonPlayerRect`). El botón de
+  pantalla completa de YouTube gira a horizontal (`SCREEN_ORIENTATION_SENSOR_LANDSCAPE`) y "atrás" lo deshace. La
+  pantalla completa de otras webs también oculta las barras. Si YouTube arranca un vídeo en silencio por haberse
+  abierto sin un toque, se activa el sonido (botón `.ytp-unmute` y API del reproductor), salvo que el usuario lo
+  haya silenciado (preferencia `yt-player-volume` o silencio justo después de un toque). Franja de descargas de una
+  sola línea.
 - **Letra de lo que suena** (`ui/lyrics/`: `LyricsDialog.kt`, `LyricsFinder.kt`, `YoutubeMusicLyrics.kt`,
   `NowPlaying.kt`; `dialog_lyrics.xml`, `item_lyrics_line.xml`, `lyrics_menu.xml`): pantalla completa con solo la
   letra, que sigue lo que suena en la página de Explorar (`ExploreBackgroundPlayback`) o en `MusicService` (por un

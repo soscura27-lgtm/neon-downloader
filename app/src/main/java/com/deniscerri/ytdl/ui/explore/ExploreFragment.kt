@@ -6,7 +6,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.MutableContextWrapper
 import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -14,6 +17,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Patterns
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -51,6 +55,7 @@ import androidx.preference.PreferenceManager
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import com.deniscerri.ytdl.MainActivity
 import com.deniscerri.ytdl.R
 import com.deniscerri.ytdl.database.enums.DownloadType
 import com.deniscerri.ytdl.database.models.CookieItem
@@ -107,6 +112,17 @@ class ExploreFragment : Fragment() {
     private lateinit var errorView: View
     private lateinit var fullscreenContainer: FrameLayout
 
+    /** Todo lo que no es la página (barra de arriba, descargas, "Escuchar"): se esconde con el vídeo a pantalla completa. */
+    private lateinit var chrome: View
+
+    /** Donde vive el navegador (fondo negro: las bandas a los lados del vídeo a pantalla completa). */
+    private lateinit var webHolder: FrameLayout
+
+    /** En horizontal, en un vídeo de YouTube: solo se ve el reproductor, como en la app de YouTube. */
+    private var immersive = false
+    private var immersiveVideoId: String? = null
+    private var alignToken = 0
+
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
@@ -123,8 +139,12 @@ class ExploreFragment : Fragment() {
 
     private var adBlockScript: ScriptHandler? = null
 
+    /** Vídeos de YouTube: sin arranque en silencio y pantalla completa en horizontal (res/raw/explore_watch.js). */
+    private var watchScript: ScriptHandler? = null
+
     // Reproducción en segundo plano: lo que suena en la página y si ahora mismo suena con la app fuera
     private var backgroundScript: ScriptHandler? = null
+    private var mediaRelay = ExploreViewModel.MediaRelay()
     private var mediaState: ExploreBackgroundPlayback.State? = null
     private var mediaChannel = false
     private var backgroundActive = false
@@ -189,6 +209,8 @@ class ExploreFragment : Fragment() {
         moreButton = view.findViewById(R.id.explore_more)
         errorView = view.findViewById(R.id.explore_error)
         fullscreenContainer = view.findViewById(R.id.explore_fullscreen)
+        chrome = view.findViewById(R.id.explore_chrome)
+        webHolder = view.findViewById(R.id.explore_web_holder)
 
         setupSearch()
         view.findViewById<MaterialButton>(R.id.explore_sections).setOnClickListener { showSections() }
@@ -216,20 +238,74 @@ class ExploreFragment : Fragment() {
         showKind()
         prefs.registerOnSharedPreferenceChangeListener(kindListener)
 
-        setupWebView(view.findViewById(R.id.explore_webview))
+        setupWebView()
         setupBackHandling()
         observeDuplicates()
         observeDownloadLevel(view)
         ExploreBackgroundPlayback.attach(mediaCommander)
         activity.lifecycle.addObserver(activityObserver)
+        webHolder.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (immersive && (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop)) {
+                webHolder.post { alignImmersive(restart = true) }
+            }
+        }
+        // al girar a horizontal en un vídeo, pantalla completa (cuando ya se sabe el tamaño de la pantalla)
+        webHolder.post { updateImmersive() }
     }
 
     // ------------------------------------------------------------------------------------------
     // Navegador
     // ------------------------------------------------------------------------------------------
 
+    /**
+     * Pone el navegador en la pantalla: el que se guardó al girar el teléfono (la página sigue tal cual, sin recargarse)
+     * o uno nuevo. Se crea con un MutableContextWrapper para poder pasarlo a la pantalla nueva sin retener la vieja.
+     */
+    private fun setupWebView() {
+        val activity = requireActivity()
+        val kept = state.retained
+        state.retained = null
+        val wv = kept?.webView ?: ExploreWebView(MutableContextWrapper(activity))
+        (wv.context as? MutableContextWrapper)?.baseContext = activity
+        (wv.parent as? ViewGroup)?.removeView(wv)
+        wv.translationY = 0f
+        webHolder.addView(
+            wv,
+            0,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        if (kept == null) {
+            configureNewWebView(wv)
+        } else {
+            reuseWebView(wv, kept)
+        }
+    }
+
+    /** La página sigue viva desde antes de girar: solo cambian quienes la escuchan. */
+    private fun reuseWebView(wv: ExploreWebView, kept: ExploreViewModel.RetainedBrowser) {
+        webView = wv
+        backgroundActive = wv.keepAlive
+        adBlockScript = kept.adBlockScript
+        backgroundScript = kept.backgroundScript
+        watchScript = kept.watchScript
+        mediaChannel = kept.mediaChannel
+        mediaRelay = kept.mediaRelay
+        mediaRelay.target = { raw -> onMediaMessage(raw) }
+        if (!mediaChannel) {
+            mediaHandler.removeCallbacks(pollMedia)
+            mediaHandler.postDelayed(pollMedia, MEDIA_POLL_MS)
+        }
+        wv.webViewClient = ExploreClient()
+        wv.webChromeClient = ExploreChromeClient()
+        wv.setOnLongClickListener { onLongPress(wv) }
+        progress.visibility = View.INVISIBLE
+        onUrlChanged(wv.url)
+        // que la página cuente ya lo que suena (la notificación y la letra siguen sin cortes)
+        wv.evaluateJavascript(MEDIA_STATE_SCRIPT) { raw -> onMediaMessage(raw) }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView(wv: ExploreWebView) {
+    private fun configureNewWebView(wv: ExploreWebView) {
         webView = wv
 
         val cookies = CookieManager.getInstance()
@@ -250,6 +326,7 @@ class ExploreFragment : Fragment() {
         applyBrowserMode(wv)
         applyAdBlock(wv)
         installBackgroundPlayback(wv)
+        installWatchScript(wv)
 
         wv.webViewClient = ExploreClient()
         wv.webChromeClient = ExploreChromeClient()
@@ -364,6 +441,7 @@ class ExploreFragment : Fragment() {
             onUrlChanged(url)
             injectAdBlockFallback(view, url)
             injectBackgroundFallback(view)
+            injectWatchFallback(view, url)
         }
 
         override fun onPageFinished(view: WebView?, url: String?) {
@@ -374,6 +452,9 @@ class ExploreFragment : Fragment() {
             checkSignIn()
             injectAdBlockFallback(view, url)
             injectBackgroundFallback(view)
+            injectWatchFallback(view, url)
+            // página nueva (documento nuevo): si toca pantalla completa, se vuelve a preparar
+            if (immersive) alignImmersive(restart = true)
         }
 
         // YouTube cambia de página sin recargar (también al deslizar Shorts): aquí se entera la app de cada cambio
@@ -406,6 +487,12 @@ class ExploreFragment : Fragment() {
                 callback?.onCustomViewHidden()
                 return
             }
+            // YouTube: su botón de pantalla completa hace lo mismo que la app de YouTube (gira y llena la pantalla)
+            if (isYoutubeVideoPage()) {
+                callback?.onCustomViewHidden()
+                enterVideoFullscreen()
+                return
+            }
             customView = view
             customViewCallback = callback
             fullscreenContainer.addView(
@@ -416,6 +503,8 @@ class ExploreFragment : Fragment() {
                 )
             )
             fullscreenContainer.visibility = View.VISIBLE
+            // pantalla completa de verdad: sin la barra de navegación de la app ni las del sistema
+            (activity as? MainActivity)?.setFullscreen(true)
         }
 
         override fun onHideCustomView() {
@@ -455,6 +544,7 @@ class ExploreFragment : Fragment() {
         customView = null
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
+        (activity as? MainActivity)?.setFullscreen(immersive)
         updateCorner()
     }
 
@@ -521,6 +611,7 @@ class ExploreFragment : Fragment() {
         currentUrl = url
         currentPage = YoutubeUrls.parse(url)
         updateCorner()
+        updateImmersive()
         if (!signInBlockedShown && (url.contains("/signin/rejected") || url.contains("disallowed_useragent"))) {
             signInBlockedShown = true
             showSignInBlocked()
@@ -545,6 +636,11 @@ class ExploreFragment : Fragment() {
                     val wv = webView
                     when {
                         customView != null -> exitFullscreen()
+                        // como en la app de YouTube: "atrás" sale de la pantalla completa y se queda en el vídeo
+                        immersive -> {
+                            state.immersiveDismissedFor = currentPage.videoId
+                            updateImmersive()
+                        }
                         wv != null && wv.canGoBack() -> wv.goBack()
                         else -> {
                             // no hay más historial: se cede el "atrás" a la app y se vuelve a vigilar
@@ -1839,9 +1935,13 @@ class ExploreFragment : Fragment() {
             }.getOrNull()
         }
         mediaChannel = false
+        val relay = ExploreViewModel.MediaRelay()
+        relay.target = { raw -> onMediaMessage(raw) }
+        mediaRelay = relay
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            // el aviso pasa por el relevo: al girar el teléfono, la pantalla nueva lo recibe sin tocar la página
             val listener = WebViewCompat.WebMessageListener { _, message, _, isMainFrame, _ ->
-                if (isMainFrame) onMediaMessage(message.data)
+                if (isMainFrame) relay.target?.invoke(message.data)
             }
             mediaChannel = runCatching {
                 WebViewCompat.addWebMessageListener(wv, MEDIA_CHANNEL, ALL_ORIGINS, listener)
@@ -1860,6 +1960,28 @@ class ExploreFragment : Fragment() {
     private fun injectBackgroundFallback(view: WebView?) {
         if (view == null || backgroundScript != null) return
         view.evaluateJavascript(ExploreBackgroundPlayback.script(view.context), null)
+    }
+
+    /** Vídeos de YouTube: sin arranque en silencio y la pantalla completa en horizontal (res/raw/explore_watch.js). */
+    private fun installWatchScript(wv: WebView) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
+        watchScript = runCatching {
+            WebViewCompat.addDocumentStartJavaScript(wv, watchScriptText(wv.context), YOUTUBE_ORIGINS)
+        }.getOrNull()
+    }
+
+    private fun injectWatchFallback(view: WebView?, url: String?) {
+        if (view == null || watchScript != null || !YoutubeUrls.isYoutubeUrl(url)) return
+        view.evaluateJavascript(watchScriptText(view.context), null)
+    }
+
+    private fun watchScriptText(context: Context): String {
+        cachedWatchScript?.let { return it }
+        val text = context.applicationContext.resources.openRawResource(R.raw.explore_watch)
+            .bufferedReader(Charsets.UTF_8)
+            .use { it.readText() }
+        cachedWatchScript = text
+        return text
     }
 
     /**
@@ -1909,6 +2031,8 @@ class ExploreFragment : Fragment() {
     private fun onAppHidden() {
         val wv = webView ?: return
         val activity = activity ?: return
+        // se está girando el teléfono: la página sigue tal cual en la pantalla nueva (no se pausa)
+        if (activity.isChangingConfigurations) return
         val keepPlaying = mediaState?.playing == true &&
                 ExploreBackgroundPlayback.isEnabled(prefs) &&
                 !activity.isChangingConfigurations
@@ -1982,6 +2106,179 @@ class ExploreFragment : Fragment() {
     }
 
     // ------------------------------------------------------------------------------------------
+    // Vídeo a pantalla completa en horizontal (como la app de YouTube)
+    // ------------------------------------------------------------------------------------------
+
+    private fun isLandscape(): Boolean =
+        resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    /** Un vídeo normal de YouTube (no un Short ni YouTube Music): el que se pone a pantalla completa. */
+    private fun isYoutubeVideoPage(): Boolean {
+        val page = refreshPage()
+        return YoutubeUrls.isYoutubeUrl(currentUrl) && page.hasVideo && !page.isShort && !page.isMusic
+    }
+
+    /**
+     * Con el teléfono en horizontal y un vídeo de YouTube en pantalla se ve solo el reproductor, sin la barra de
+     * Explorar, la de navegación ni las del sistema, como en la app de YouTube. "Atrás" lo deja normal para ese vídeo;
+     * girar a vertical también.
+     */
+    private fun updateImmersive() {
+        if (view == null) return
+        if (!isLandscape()) state.immersiveDismissedFor = null
+        val want = isLandscape() && customView == null && isYoutubeVideoPage() &&
+                state.immersiveDismissedFor != currentPage.videoId
+        if (want == immersive) {
+            // otro vídeo (el siguiente del Mix, por ejemplo): se vuelve a medir el reproductor
+            if (want && currentPage.videoId != immersiveVideoId) {
+                immersiveVideoId = currentPage.videoId
+                alignImmersive(restart = true)
+            }
+            // en horizontal sin vídeo, la app deja de pedir horizontal (si lo había pedido)
+            if (!want && isLandscape()) releaseLandscape()
+            return
+        }
+        immersive = want
+        immersiveVideoId = if (want) currentPage.videoId else null
+        chrome.visibility = if (want) View.GONE else View.VISIBLE
+        (activity as? MainActivity)?.setFullscreen(want)
+        val wv = webView
+        if (want) {
+            alignImmersive(restart = true)
+        } else {
+            alignToken++
+            wv?.let { resetBrowserFrame(it) }
+            wv?.evaluateJavascript(FULLSCREEN_OFF_SCRIPT, null)
+            if (isLandscape()) releaseLandscape()
+        }
+    }
+
+    /** El botón de pantalla completa de YouTube: horizontal y solo el vídeo, como en su app. */
+    private fun enterVideoFullscreen() {
+        state.immersiveDismissedFor = null
+        if (isLandscape()) {
+            updateImmersive()
+            return
+        }
+        // al girar se vuelve a crear la pantalla (sin recargar la página) y el vídeo queda a pantalla completa
+        state.landscapeRequested = true
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+
+    /** La app ya no necesita la pantalla en horizontal: el giro vuelve a seguir al teléfono. */
+    private fun releaseLandscape() {
+        if (!state.landscapeRequested) return
+        state.landscapeRequested = false
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
+    /**
+     * Coloca el navegador para que el reproductor llene la pantalla. En YouTube el reproductor ocupa todo el ancho de
+     * la página, así que el navegador se hace tan ancho como para que el reproductor tenga la altura de la pantalla
+     * (centrado, con bandas negras a los lados) y se sube lo que haga falta para que el reproductor quede arriba.
+     * Se mide la página varias veces porque YouTube se vuelve a maquetar con cada cambio de tamaño.
+     */
+    private fun alignImmersive(restart: Boolean = false, attempt: Int = 0) {
+        val wv = webView ?: return
+        if (!immersive || view == null) return
+        if (restart) {
+            alignToken++
+            // la primera vez se parte de un reproductor 16:9; después, de donde ya estaba (sin saltos)
+            if (wv.layoutParams?.width == ViewGroup.LayoutParams.MATCH_PARENT) fitBrowserToPlayer(wv, PLAYER_ASPECT, 0f)
+            wv.evaluateJavascript(FULLSCREEN_ON_SCRIPT, null)
+        }
+        val token = alignToken
+        mediaHandler.postDelayed({ measurePlayer(wv, token, attempt) }, ALIGN_DELAY_MS)
+    }
+
+    private fun measurePlayer(wv: ExploreWebView, token: Int, attempt: Int) {
+        if (token != alignToken || !immersive || webView !== wv || view == null) return
+        wv.evaluateJavascript(PLAYER_RECT_SCRIPT) { raw ->
+            if (token != alignToken || !immersive || webView !== wv || view == null) return@evaluateJavascript
+            val rect = runCatching { JSONObject(raw) }.getOrNull()
+            val width = rect?.optDouble("w", 0.0) ?: 0.0
+            val height = rect?.optDouble("h", 0.0) ?: 0.0
+            if (rect == null || width <= 0.0 || height <= 0.0) {
+                // el reproductor todavía no está en la página: se vuelve a mirar dentro de un momento
+                if (attempt < ALIGN_TRIES) alignImmersive(attempt = attempt + 1)
+                return@evaluateJavascript
+            }
+            val dpr = rect.optDouble("dpr", 1.0).takeIf { it > 0.0 } ?: 1.0
+            val shift = (rect.optDouble("t", 0.0) * dpr).toFloat()
+            val changed = fitBrowserToPlayer(wv, (width / height).toFloat(), shift)
+            // la página se maqueta otra vez con el tamaño nuevo: se comprueba hasta que quede quieta
+            if (changed && attempt < ALIGN_TRIES) alignImmersive(attempt = attempt + 1)
+        }
+    }
+
+    /** Ancho, alto y desplazamiento del navegador para un reproductor de esa proporción. true si algo cambió. */
+    private fun fitBrowserToPlayer(wv: WebView, aspect: Float, shiftPx: Float): Boolean {
+        val holderWidth = webHolder.width
+        val holderHeight = webHolder.height
+        if (holderWidth <= 0 || holderHeight <= 0 || aspect <= 0f) return true
+        val width = (holderHeight * aspect).toInt().coerceIn(1, holderWidth)
+        val shift = shiftPx.coerceIn(0f, holderHeight.toFloat())
+        val height = holderHeight + shift.toInt()
+        val gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        val params = wv.layoutParams as? FrameLayout.LayoutParams
+        val changed = params == null || params.width != width || params.height != height ||
+                params.gravity != gravity || kotlin.math.abs(wv.translationY + shift) > 1f
+        if (changed) {
+            val newParams = params ?: FrameLayout.LayoutParams(width, height)
+            newParams.width = width
+            newParams.height = height
+            newParams.gravity = gravity
+            wv.layoutParams = newParams
+            wv.translationY = -shift
+        }
+        return changed
+    }
+
+    private fun resetBrowserFrame(wv: WebView) {
+        wv.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        wv.translationY = 0f
+    }
+
+    /**
+     * Se está girando el teléfono: el navegador se guarda tal cual (la página sigue cargada y lo que suena sigue
+     * sonando) para que la pantalla nueva lo vuelva a poner. Mientras tanto no avisa a ninguna pantalla.
+     */
+    private fun keepBrowserForRecreation() {
+        val wv = webView ?: return
+        mediaHandler.removeCallbacks(pollMedia)
+        activity?.lifecycle?.removeObserver(activityObserver)
+        mediaRelay.target = null
+        ExploreBackgroundPlayback.detach(mediaCommander, keepState = true)
+        // la pantalla completa de una web (no la de YouTube) no se puede pasar a la pantalla nueva
+        exitFullscreen()
+        alignToken++
+        wv.webViewClient = AdBlockOnlyClient()
+        wv.webChromeClient = WebChromeClient()
+        wv.setOnLongClickListener(null)
+        resetBrowserFrame(wv)
+        state.retained = ExploreViewModel.RetainedBrowser(
+            webView = wv,
+            adBlockScript = adBlockScript,
+            backgroundScript = backgroundScript,
+            watchScript = watchScript,
+            mediaChannel = mediaChannel,
+            mediaRelay = mediaRelay
+        )
+        adBlockScript = null
+        backgroundScript = null
+        watchScript = null
+        CookieManager.getInstance().flush()
+    }
+
+    /** Mientras se gira el teléfono el navegador sigue bloqueando anuncios, sin avisar a ninguna pantalla. */
+    private class AdBlockOnlyClient : WebViewClient() {
+        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+            if (request == null) return null
+            return AdBlocker.intercept(request)
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------
     // Ciclo de vida
     // ------------------------------------------------------------------------------------------
 
@@ -1995,7 +2292,9 @@ class ExploreFragment : Fragment() {
 
     override fun onDestroyView() {
         if (this::prefs.isInitialized) prefs.unregisterOnSharedPreferenceChangeListener(kindListener)
-        finishBackgroundPlayback()
+        // al girar el teléfono la página no se cierra: la pantalla nueva vuelve a poner el mismo navegador
+        val recreating = activity?.isChangingConfigurations == true && webView != null
+        if (recreating) keepBrowserForRecreation() else finishBackgroundPlayback()
         fetchJob?.cancel()
         fetchJob = null
         progressDialog?.dismiss()
@@ -2009,9 +2308,19 @@ class ExploreFragment : Fragment() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
         exitFullscreen()
-        webView?.let { wv ->
+        alignToken++
+        if (!recreating) {
+            // se sale de Explorar: la app vuelve a tener sus barras y el giro vuelve a ser el del teléfono
+            if (immersive) (activity as? MainActivity)?.setFullscreen(false)
+            immersive = false
+            releaseLandscape()
+        }
+        webView?.takeIf { recreating }?.let { wv -> (wv.parent as? ViewGroup)?.removeView(wv) }
+        webView?.takeIf { !recreating }?.let { wv ->
             adBlockScript = null
             backgroundScript = null
+            watchScript = null
+            mediaRelay.target = null
             runCatching {
                 val bundle = Bundle()
                 wv.saveState(bundle)
@@ -2039,6 +2348,19 @@ class ExploreFragment : Fragment() {
         private const val MEDIA_CHANNEL = "neonMedia"
         private const val MEDIA_POLL_MS = 3000L
         private const val MEDIA_STATE_SCRIPT = "window.__neonMediaState ? window.__neonMediaState() : null"
+
+        /** Dónde está el reproductor de YouTube (res/raw/explore_watch.js). */
+        private const val PLAYER_RECT_SCRIPT = "window.__neonPlayerRect ? window.__neonPlayerRect() : null"
+        private const val FULLSCREEN_ON_SCRIPT = "window.__neonFullscreen && window.__neonFullscreen(true)"
+        private const val FULLSCREEN_OFF_SCRIPT = "window.__neonFullscreen && window.__neonFullscreen(false)"
+
+        /** Proporción con la que se empieza a colocar el reproductor (la de casi todos los vídeos). */
+        private const val PLAYER_ASPECT = 16f / 9f
+        private const val ALIGN_DELAY_MS = 350L
+        private const val ALIGN_TRIES = 6
+
+        @Volatile
+        private var cachedWatchScript: String? = null
         private val ALL_ORIGINS: Set<String> = setOf("*")
         private val YOUTUBE_ORIGINS: Set<String> = setOf("https://*.youtube.com", "https://youtube.com")
 

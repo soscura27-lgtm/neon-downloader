@@ -9,6 +9,13 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+        <!-- Lo que no es la página: barra superior, descargas, "Escuchar" y la carga de la página -->
+        <LinearLayout
+            android:id="@+id/explore_chrome"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
         <!--
           Barra superior: apartados, buscador, y en la esquina el botón con TODAS las opciones de descarga
           (formato, descargar, escuchar, elegir vídeos, comentarios con GIF...). Así nada flota encima del
@@ -112,18 +119,18 @@
 
         </LinearLayout>
 
-        <!-- Nivel de descarga global: % del lote, cuántas van y cuántas faltan. Toca para ver la cola. -->
+        <!-- Nivel de descarga global (una franja fina): % del lote, cuántas van y cuántas faltan. Toca para ver la cola. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/explore_dl_strip"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="12dp"
-            android:layout_marginBottom="6dp"
+            android:layout_marginBottom="4dp"
             android:clickable="true"
             android:focusable="true"
             android:visibility="gone"
             app:cardBackgroundColor="?attr/colorSecondaryContainer"
-            app:cardCornerRadius="14dp"
+            app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
             app:strokeColor="?attr/colorPrimary"
             app:strokeWidth="1dp">
@@ -131,34 +138,52 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:paddingHorizontal="14dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="10dp">
+                android:orientation="vertical">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:minHeight="30dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="6dp">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/baseline_download_24"
+                        app:tint="?attr/colorPrimary" />
 
                     <TextView
                         android:id="@+id/explore_dl_percent"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:minWidth="64dp"
+                        android:layout_marginStart="6dp"
+                        android:minWidth="34dp"
                         android:textColor="?attr/colorPrimary"
-                        android:textSize="22sp"
+                        android:textSize="13sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/explore_dl_detail"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
                         android:layout_weight="1"
-                        android:maxLines="2"
+                        android:ellipsize="end"
+                        android:maxLines="1"
                         android:textColor="?attr/colorOnSecondaryContainer"
                         android:textSize="12sp" />
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:alpha="0.7"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_baseline_keyboard_arrow_right_24"
+                        app:tint="?attr/colorOnSecondaryContainer" />
 
                 </LinearLayout>
 
@@ -166,11 +191,10 @@
                     android:id="@+id/explore_dl_bar"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
                     android:indeterminate="false"
                     android:max="100"
-                    app:trackCornerRadius="4dp"
-                    app:trackThickness="6dp" />
+                    app:trackCornerRadius="0dp"
+                    app:trackThickness="3dp" />
 
             </LinearLayout>
 
@@ -275,16 +299,22 @@
             android:visibility="invisible"
             app:trackThickness="2dp" />
 
+        </LinearLayout>
+
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <!-- WebView que puede seguir sonando en segundo plano (ver ExploreWebView) -->
-            <com.deniscerri.ytdl.ui.explore.ExploreWebView
-                android:id="@+id/explore_webview"
+            <!--
+              Aquí va el navegador (ExploreWebView, que puede seguir sonando en segundo plano). Se pone desde el código
+              para conservarlo al girar el teléfono. Fondo negro: las bandas a los lados del vídeo a pantalla completa.
+            -->
+            <FrameLayout
+                android:id="@+id/explore_web_holder"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:background="@android:color/black" />
 
             <LinearLayout
                 android:id="@+id/explore_error"

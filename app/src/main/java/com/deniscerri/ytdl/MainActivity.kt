@@ -19,7 +19,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.forEach
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -92,6 +94,10 @@ class MainActivity : BaseActivity() {
     private lateinit var downloadCardViewModel: DownloadCardViewModel
     private var navigationView: NavigationView? = null
     private var navigationBarView: NavigationBarView? = null
+
+    /** Explorar enseña un vídeo a pantalla completa: sin la barra de navegación de la app ni las del sistema. */
+    private var fullscreen = false
+    private var navigationViewVisibility = View.VISIBLE
     private lateinit var navHostFragment : NavHostFragment
     private lateinit var navController : NavController
     private var loadingRuntimeDialog: androidx.appcompat.app.AlertDialog? = null
@@ -146,7 +152,7 @@ class MainActivity : BaseActivity() {
                     windowInsets!!, view
                 )
                 val isImeVisible = windowInsetsCompat.isVisible(WindowInsetsCompat.Type.ime())
-                visibility = if (isImeVisible) View.GONE else View.VISIBLE
+                visibility = if (isImeVisible || fullscreen) View.GONE else View.VISIBLE
                 view.onApplyWindowInsets(windowInsets)
             }
         }
@@ -385,6 +391,31 @@ class MainActivity : BaseActivity() {
             }
         }
 
+    }
+
+    /**
+     * Pantalla completa para un vídeo de Explorar (como la app de YouTube en horizontal): se ocultan la barra de
+     * navegación de la app y las barras del sistema (se ven un momento deslizando desde el borde).
+     */
+    fun setFullscreen(on: Boolean) {
+        if (fullscreen == on) return
+        fullscreen = on
+        navigationBarView?.visibility = if (on) View.GONE else View.VISIBLE
+        navigationView?.let { side ->
+            if (on) {
+                navigationViewVisibility = side.visibility
+                side.visibility = View.GONE
+            } else {
+                side.visibility = navigationViewVisibility
+            }
+        }
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        if (on) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     fun disableBottomNavigation(){

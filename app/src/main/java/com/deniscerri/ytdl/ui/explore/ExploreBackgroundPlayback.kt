@@ -109,10 +109,14 @@ object ExploreBackgroundPlayback {
         commander = command
     }
 
-    fun detach(command: (String) -> Unit) {
+    /**
+     * La pantalla de Explorar se va. Con [keepState] (se está girando el teléfono y la página sigue viva) se conserva
+     * lo último que contó la página, para que la notificación no cambie mientras llega la pantalla nueva.
+     */
+    fun detach(command: (String) -> Unit, keepState: Boolean = false) {
         if (commander === command) {
             commander = null
-            state = null
+            if (!keepState) state = null
         }
     }
 
