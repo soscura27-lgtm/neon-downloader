@@ -25,6 +25,12 @@ class ExploreViewModel : ViewModel() {
     /** La app giró la pantalla a horizontal para la pantalla completa (al salir se devuelve el giro al teléfono). */
     internal var landscapeRequested = false
 
+    /**
+     * Se salió de la pantalla completa con "atrás": la pantalla queda en vertical hasta que el teléfono esté de verdad
+     * en vertical (como en la app de YouTube); entonces el giro vuelve a seguir al teléfono.
+     */
+    internal var portraitRequested = false
+
     /** Lo que vive con el WebView y no se puede volver a crear sin recargar la página. */
     internal class RetainedBrowser(
         val webView: ExploreWebView,

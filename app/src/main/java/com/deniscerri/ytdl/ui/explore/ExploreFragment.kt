@@ -19,6 +19,7 @@ import android.os.Looper
 import android.util.Patterns
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.OrientationEventListener
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -122,6 +123,7 @@ class ExploreFragment : Fragment() {
     private var immersive = false
     private var immersiveVideoId: String? = null
     private var alignToken = 0
+    private var portraitWatcher: OrientationEventListener? = null
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -251,6 +253,7 @@ class ExploreFragment : Fragment() {
         }
         // al girar a horizontal en un vídeo, pantalla completa (cuando ya se sabe el tamaño de la pantalla)
         webHolder.post { updateImmersive() }
+        watchForPortrait()
     }
 
     // ------------------------------------------------------------------------------------------
@@ -637,10 +640,7 @@ class ExploreFragment : Fragment() {
                     when {
                         customView != null -> exitFullscreen()
                         // como en la app de YouTube: "atrás" sale de la pantalla completa y se queda en el vídeo
-                        immersive -> {
-                            state.immersiveDismissedFor = currentPage.videoId
-                            updateImmersive()
-                        }
+                        immersive -> leaveImmersiveByBack()
                         wv != null && wv.canGoBack() -> wv.goBack()
                         else -> {
                             // no hay más historial: se cede el "atrás" a la app y se vuelve a vigilar
@@ -2156,6 +2156,8 @@ class ExploreFragment : Fragment() {
     /** El botón de pantalla completa de YouTube: horizontal y solo el vídeo, como en su app. */
     private fun enterVideoFullscreen() {
         state.immersiveDismissedFor = null
+        stopPortraitWatcher()
+        state.portraitRequested = false
         if (isLandscape()) {
             updateImmersive()
             return
@@ -2163,6 +2165,53 @@ class ExploreFragment : Fragment() {
         // al girar se vuelve a crear la pantalla (sin recargar la página) y el vídeo queda a pantalla completa
         state.landscapeRequested = true
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+
+    /**
+     * "Atrás" en la pantalla completa: como en la app de YouTube, la pantalla pasa a vertical y se queda en el vídeo.
+     * Sigue en vertical hasta que el teléfono se ponga de verdad en vertical; luego, girarlo vuelve a poner la
+     * pantalla completa. En tabletas (donde lo normal es horizontal) solo se sale de la pantalla completa.
+     */
+    private fun leaveImmersiveByBack() {
+        state.immersiveDismissedFor = currentPage.videoId
+        val activity = activity
+        if (activity != null && isLandscape() && resources.configuration.smallestScreenWidthDp < 600) {
+            state.landscapeRequested = false
+            state.portraitRequested = true
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        updateImmersive()
+    }
+
+    /** Mientras la app tiene la pantalla en vertical, se mira el teléfono para devolverle el giro cuando esté derecho. */
+    private fun watchForPortrait() {
+        if (!state.portraitRequested || portraitWatcher != null) return
+        val watcher = object : OrientationEventListener(requireContext()) {
+            override fun onOrientationChanged(degrees: Int) {
+                if (degrees == ORIENTATION_UNKNOWN) return
+                val upright = degrees <= 25 || degrees >= 335 || degrees in 155..205
+                if (upright) releasePortrait()
+            }
+        }
+        if (!watcher.canDetectOrientation()) {
+            releasePortrait()
+            return
+        }
+        portraitWatcher = watcher
+        watcher.enable()
+    }
+
+    private fun stopPortraitWatcher() {
+        portraitWatcher?.disable()
+        portraitWatcher = null
+    }
+
+    /** El teléfono ya está en vertical (o se sale de Explorar): el giro vuelve a seguir al teléfono. */
+    private fun releasePortrait() {
+        stopPortraitWatcher()
+        if (!state.portraitRequested) return
+        state.portraitRequested = false
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
     /** La app ya no necesita la pantalla en horizontal: el giro vuelve a seguir al teléfono. */
@@ -2309,11 +2358,13 @@ class ExploreFragment : Fragment() {
         fileCallback = null
         exitFullscreen()
         alignToken++
+        stopPortraitWatcher()
         if (!recreating) {
             // se sale de Explorar: la app vuelve a tener sus barras y el giro vuelve a ser el del teléfono
             if (immersive) (activity as? MainActivity)?.setFullscreen(false)
             immersive = false
             releaseLandscape()
+            releasePortrait()
         }
         webView?.takeIf { recreating }?.let { wv -> (wv.parent as? ViewGroup)?.removeView(wv) }
         webView?.takeIf { !recreating }?.let { wv ->
