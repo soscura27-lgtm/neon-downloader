@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
@@ -98,6 +99,14 @@ class MainActivity : BaseActivity() {
     /** Explorar enseña un vídeo a pantalla completa: sin la barra de navegación de la app ni las del sistema. */
     private var fullscreen = false
     private var navigationViewVisibility = View.VISIBLE
+
+    /**
+     * Con qué giro y ancho se hizo la pantalla (de eso dependen sus diseños). Al girar el teléfono en Explorar la
+     * pantalla no se rehace (la página y el vídeo siguen tal cual); se rehace al ir a otra pestaña.
+     */
+    private var layoutOrientation = Configuration.ORIENTATION_UNDEFINED
+    private var layoutSmallestWidth = 0
+    private var recreatePending = false
     private lateinit var navHostFragment : NavHostFragment
     private lateinit var navController : NavController
     private var loadingRuntimeDialog: androidx.appcompat.app.AlertDialog? = null
@@ -118,6 +127,8 @@ class MainActivity : BaseActivity() {
         window.navigationBarColor = SurfaceColors.SURFACE_2.getColor(this)
         setContentView(R.layout.activity_main)
         context = baseContext
+        layoutOrientation = resources.configuration.orientation
+        layoutSmallestWidth = resources.configuration.smallestScreenWidthDp
 
         resultViewModel = ViewModelProvider(this)[ResultViewModel::class.java]
         cookieViewModel = ViewModelProvider(this)[CookieViewModel::class.java]
@@ -139,6 +150,13 @@ class MainActivity : BaseActivity() {
 
         navHostFragment = supportFragmentManager.findFragmentById(R.id.frame_layout) as NavHostFragment
         navController = navHostFragment.findNavController()
+        // se giró el teléfono en Explorar: al ir a otra pestaña, la pantalla se rehace con el diseño de ese giro
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            if (recreatePending && destination.id != R.id.exploreFragment && destination.navigatorName != "dialog") {
+                recreatePending = false
+                Handler(Looper.getMainLooper()).post { if (!isFinishing && !isDestroyed) recreate() }
+            }
+        }
         kotlin.runCatching {
             navigationView = findViewById(R.id.navigationView)
         }
@@ -372,6 +390,8 @@ class MainActivity : BaseActivity() {
     }
 
     fun showBottomNavigation(){
+        // con un vídeo a pantalla completa la barra sigue escondida (se enseña al salir)
+        if (fullscreen) return
         navigationBarView?.apply {
             if (this is BottomNavigationView){
                 this@MainActivity.findViewById<FragmentContainerView>(R.id.frame_layout).updateLayoutParams<ConstraintLayout.LayoutParams> {
@@ -400,7 +420,15 @@ class MainActivity : BaseActivity() {
     fun setFullscreen(on: Boolean) {
         if (fullscreen == on) return
         fullscreen = on
-        navigationBarView?.visibility = if (on) View.GONE else View.VISIBLE
+        navigationBarView?.apply {
+            if (on) {
+                visibility = View.GONE
+            } else {
+                translationX = 0f
+                translationY = 0f
+                visibility = View.VISIBLE
+            }
+        }
         navigationView?.let { side ->
             if (on) {
                 navigationViewVisibility = side.visibility
@@ -409,12 +437,43 @@ class MainActivity : BaseActivity() {
                 side.visibility = navigationViewVisibility
             }
         }
+        applySystemBars()
+    }
+
+    private fun applySystemBars() {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
-        if (on) {
+        if (fullscreen) {
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.systemBars())
         } else {
             controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // al volver de un diálogo o de otra app, las barras del sistema siguen escondidas
+        if (hasFocus && fullscreen) applySystemBars()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val sameLayout = newConfig.orientation == layoutOrientation &&
+                newConfig.smallestScreenWidthDp == layoutSmallestWidth
+        if (sameLayout) {
+            recreatePending = false
+            return
+        }
+        // Explorar a la vista (también con una hoja de descarga abierta encima)
+        val current = if (this::navController.isInitialized) navController.currentDestination else null
+        val inExplore = current?.id == R.id.exploreFragment ||
+                (current?.navigatorName == "dialog" &&
+                        navController.previousBackStackEntry?.destination?.id == R.id.exploreFragment)
+        if (inExplore) {
+            // Explorar se adapta sola: la página no se recarga y el vídeo sigue sonando
+            recreatePending = true
+        } else {
+            recreate()
         }
     }
 

@@ -6,7 +6,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.MutableContextWrapper
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -261,50 +260,17 @@ class ExploreFragment : Fragment() {
     // ------------------------------------------------------------------------------------------
 
     /**
-     * Pone el navegador en la pantalla: el que se guardó al girar el teléfono (la página sigue tal cual, sin recargarse)
-     * o uno nuevo. Se crea con un MutableContextWrapper para poder pasarlo a la pantalla nueva sin retener la vieja.
+     * Pone el navegador en su hueco. Al girar el teléfono en Explorar la pantalla ya no se rehace (ver MainActivity),
+     * así que el navegador sigue tal cual: la página no se recarga y el vídeo sigue sonando.
      */
     private fun setupWebView() {
-        val activity = requireActivity()
-        val kept = state.retained
-        state.retained = null
-        val wv = kept?.webView ?: ExploreWebView(MutableContextWrapper(activity))
-        (wv.context as? MutableContextWrapper)?.baseContext = activity
-        (wv.parent as? ViewGroup)?.removeView(wv)
-        wv.translationY = 0f
+        val wv = ExploreWebView(requireActivity())
         webHolder.addView(
             wv,
             0,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
-        if (kept == null) {
-            configureNewWebView(wv)
-        } else {
-            reuseWebView(wv, kept)
-        }
-    }
-
-    /** La página sigue viva desde antes de girar: solo cambian quienes la escuchan. */
-    private fun reuseWebView(wv: ExploreWebView, kept: ExploreViewModel.RetainedBrowser) {
-        webView = wv
-        backgroundActive = wv.keepAlive
-        adBlockScript = kept.adBlockScript
-        backgroundScript = kept.backgroundScript
-        watchScript = kept.watchScript
-        mediaChannel = kept.mediaChannel
-        mediaRelay = kept.mediaRelay
-        mediaRelay.target = { raw -> onMediaMessage(raw) }
-        if (!mediaChannel) {
-            mediaHandler.removeCallbacks(pollMedia)
-            mediaHandler.postDelayed(pollMedia, MEDIA_POLL_MS)
-        }
-        wv.webViewClient = ExploreClient()
-        wv.webChromeClient = ExploreChromeClient()
-        wv.setOnLongClickListener { onLongPress(wv) }
-        progress.visibility = View.INVISIBLE
-        onUrlChanged(wv.url)
-        // que la página cuente ya lo que suena (la notificación y la letra siguen sin cortes)
-        wv.evaluateJavascript(MEDIA_STATE_SCRIPT) { raw -> onMediaMessage(raw) }
+        configureNewWebView(wv)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -2179,6 +2145,7 @@ class ExploreFragment : Fragment() {
             state.landscapeRequested = false
             state.portraitRequested = true
             activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            watchForPortrait()
         }
         updateImmersive()
     }
@@ -2288,45 +2255,6 @@ class ExploreFragment : Fragment() {
         wv.translationY = 0f
     }
 
-    /**
-     * Se está girando el teléfono: el navegador se guarda tal cual (la página sigue cargada y lo que suena sigue
-     * sonando) para que la pantalla nueva lo vuelva a poner. Mientras tanto no avisa a ninguna pantalla.
-     */
-    private fun keepBrowserForRecreation() {
-        val wv = webView ?: return
-        mediaHandler.removeCallbacks(pollMedia)
-        activity?.lifecycle?.removeObserver(activityObserver)
-        mediaRelay.target = null
-        ExploreBackgroundPlayback.detach(mediaCommander, keepState = true)
-        // la pantalla completa de una web (no la de YouTube) no se puede pasar a la pantalla nueva
-        exitFullscreen()
-        alignToken++
-        wv.webViewClient = AdBlockOnlyClient()
-        wv.webChromeClient = WebChromeClient()
-        wv.setOnLongClickListener(null)
-        resetBrowserFrame(wv)
-        state.retained = ExploreViewModel.RetainedBrowser(
-            webView = wv,
-            adBlockScript = adBlockScript,
-            backgroundScript = backgroundScript,
-            watchScript = watchScript,
-            mediaChannel = mediaChannel,
-            mediaRelay = mediaRelay
-        )
-        adBlockScript = null
-        backgroundScript = null
-        watchScript = null
-        CookieManager.getInstance().flush()
-    }
-
-    /** Mientras se gira el teléfono el navegador sigue bloqueando anuncios, sin avisar a ninguna pantalla. */
-    private class AdBlockOnlyClient : WebViewClient() {
-        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-            if (request == null) return null
-            return AdBlocker.intercept(request)
-        }
-    }
-
     // ------------------------------------------------------------------------------------------
     // Ciclo de vida
     // ------------------------------------------------------------------------------------------
@@ -2339,11 +2267,18 @@ class ExploreFragment : Fragment() {
         super.onPause()
     }
 
+    /** El teléfono giró: la página sigue tal cual y solo cambia si el vídeo va a pantalla completa. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (view == null) return
+        webHolder.post { updateImmersive() }
+    }
+
     override fun onDestroyView() {
         if (this::prefs.isInitialized) prefs.unregisterOnSharedPreferenceChangeListener(kindListener)
-        // al girar el teléfono la página no se cierra: la pantalla nueva vuelve a poner el mismo navegador
-        val recreating = activity?.isChangingConfigurations == true && webView != null
-        if (recreating) keepBrowserForRecreation() else finishBackgroundPlayback()
+        // si la pantalla se rehace (un cambio poco común: tamaño de letra, densidad...) se mantiene el giro pedido
+        val recreating = activity?.isChangingConfigurations == true
+        finishBackgroundPlayback()
         fetchJob?.cancel()
         fetchJob = null
         progressDialog?.dismiss()
@@ -2366,8 +2301,7 @@ class ExploreFragment : Fragment() {
             releaseLandscape()
             releasePortrait()
         }
-        webView?.takeIf { recreating }?.let { wv -> (wv.parent as? ViewGroup)?.removeView(wv) }
-        webView?.takeIf { !recreating }?.let { wv ->
+        webView?.let { wv ->
             adBlockScript = null
             backgroundScript = null
             watchScript = null
